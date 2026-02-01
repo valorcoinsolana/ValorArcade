@@ -226,7 +226,7 @@ class DevBotDodger extends Phaser.Scene {
     // - increase spawn rate
     // - increase bot speed slowly
     const t = this.elapsedSeconds;
-    this.spawnInterval = clamp(900 - t * 10, 260, 900); // from 900ms down to 260ms
+    this.spawnInterval = clamp(1200 - t * 6, 450, 1200); // from 900ms down to 260ms
     const botSpeedBoost = clamp(t * 1.2, 0, 180); // speed grows with time
 
     // Spawn bots
