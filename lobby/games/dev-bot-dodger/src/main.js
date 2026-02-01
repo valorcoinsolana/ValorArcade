@@ -26,6 +26,10 @@ const SCAM_LINES = [
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function randItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function pad2(n) { return String(n).padStart(2, "0"); }
+function normalize(x, y) {
+  const d = Math.hypot(x, y) || 1;
+  return [x / d, y / d];
+}
 
 class DevBotDodger extends Phaser.Scene {
   constructor() {
@@ -70,6 +74,7 @@ class DevBotDodger extends Phaser.Scene {
     // Player
     this.player = this.add.rectangle(W / 2, H / 2, 18, 18, 0x22c55e, 1);
     this.playerSpeed = 220;
+    this.playerVel = { x: 0, y: 0 }; // used for prediction
 
     // Input
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -408,6 +413,15 @@ class DevBotDodger extends Phaser.Scene {
       });
     }
 
+    // Bot personality for steering (prevents clumping)
+    const personality = {
+      sepWeight: Phaser.Math.FloatBetween(0.9, 1.6),
+      chaseWeight: Phaser.Math.FloatBetween(0.7, 1.2),
+      strafeWeight: Phaser.Math.FloatBetween(0.0, 0.9),
+      strafeDir: Math.random() < 0.5 ? -1 : 1,
+      predict: Phaser.Math.FloatBetween(0.0, 0.35), // seconds-ish factor
+    };
+
     this.bots.push({
       bot,
       bubble,
@@ -415,6 +429,7 @@ class DevBotDodger extends Phaser.Scene {
       speed: 70 + speedBoost,
       hasBubble,
       bubbleNextAt: hasBubble ? (this.time.now + Phaser.Math.Between(300, 1200)) : 0,
+      personality,
     });
   }
 
@@ -462,17 +477,60 @@ class DevBotDodger extends Phaser.Scene {
     const len = Math.hypot(ix, iy);
     if (len > 0) { ix /= len; iy /= len; }
 
+    // Track player velocity for prediction
+    this.playerVel.x = ix * this.playerSpeed;
+    this.playerVel.y = iy * this.playerSpeed;
+
+    // Apply movement
     this.player.x = clamp(this.player.x + ix * this.playerSpeed * (delta / 1000), 12, W - 12);
     this.player.y = clamp(this.player.y + iy * this.playerSpeed * (delta / 1000), 12, H - 12);
 
-    // Bots chase + collision
-    for (const b of this.bots) {
-      const dx = this.player.x - b.bot.x;
-      const dy = this.player.y - b.bot.y;
-      const d = Math.hypot(dx, dy) || 1;
+    // Bots steer + collision
+    const dt = delta / 1000;
+    const sepRadius = 42; // tune: bigger = more spread
 
-      b.bot.x += (dx / d) * b.speed * (delta / 1000);
-      b.bot.y += (dy / d) * b.speed * (delta / 1000);
+    for (const b of this.bots) {
+      // Predict target a bit ahead
+      const pr = b.personality?.predict ?? 0;
+      const targetX = this.player.x + this.playerVel.x * pr;
+      const targetY = this.player.y + this.playerVel.y * pr;
+
+      // Chase direction
+      let vx = targetX - b.bot.x;
+      let vy = targetY - b.bot.y;
+      [vx, vy] = normalize(vx, vy);
+
+      // Strafe (perpendicular/orbit)
+      let sx = -vy;
+      let sy = vx;
+      const sdir = b.personality?.strafeDir ?? 1;
+      sx *= sdir; sy *= sdir;
+
+      // Separation force from nearby bots
+      let ax = 0, ay = 0;
+      for (const o of this.bots) {
+        if (o === b) continue;
+        const ox = b.bot.x - o.bot.x;
+        const oy = b.bot.y - o.bot.y;
+        const dist = Math.hypot(ox, oy);
+        if (dist > 0 && dist < sepRadius) {
+          const push = (sepRadius - dist) / sepRadius; // 0..1
+          ax += (ox / dist) * push;
+          ay += (oy / dist) * push;
+        }
+      }
+      [ax, ay] = normalize(ax, ay);
+
+      const chaseW = b.personality?.chaseWeight ?? 1;
+      const strafeW = b.personality?.strafeWeight ?? 0.4;
+      const sepW = b.personality?.sepWeight ?? 1.2;
+
+      let mx = vx * chaseW + sx * strafeW + ax * sepW;
+      let my = vy * chaseW + sy * strafeW + ay * sepW;
+      [mx, my] = normalize(mx, my);
+
+      b.bot.x += mx * b.speed * dt;
+      b.bot.y += my * b.speed * dt;
 
       // Bubble follow + sporadic show/hide
       if (b.hasBubble && b.bubble) {
