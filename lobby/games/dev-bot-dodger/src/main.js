@@ -534,7 +534,14 @@ class DevBotDodger extends Phaser.Scene {
     this.gameOverUI._scoreText.setText(`Uptime survived: ${pad2(mm)}:${pad2(ss)}`);
 
     this.gameOverUI.setVisible(true);
-  }
+    // Fade bots/bubbles behind the overlay so the screen is readable
+for (const b of this.bots) {
+  this.tweens.add({
+    targets: [b.bot, b.bubble].filter(Boolean),
+    alpha: 0.25,
+    duration: 180,
+    ease: "Sine.Out",
+  });
 }
 
 new Phaser.Game({
