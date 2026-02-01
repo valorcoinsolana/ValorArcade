@@ -19,8 +19,11 @@
   </style>
 </head>
 <body>
-  <a class="back" href="ValorArcade/">← Arcade</a>
-  <div id="game"></div>
+  <a class="back" href="#" onclick="
+  const repoBase = '/' + location.pathname.split('/')[1] + '/';
+  location.href = repoBase;
+  return false;
+">← Arcade</a>
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script type="module" src="./src/main.js"></script>
