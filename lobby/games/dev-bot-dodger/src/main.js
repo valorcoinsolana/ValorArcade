@@ -154,7 +154,7 @@ class DevBotDodger extends Phaser.Scene {
       }
     ).setOrigin(0.5, 0);
 
-    const closeBtn = this.makeButton(W / 2, H / 2 + 92, 220, 40, "BACK", () => this.toggleHowTo());
+    const closeBtn = this.makeButton(W / 2, H / 2 + 130, 220, 40, "BACK", () => this.toggleHowTo());
 
     howPanel.add([howBox, howTitle, howText, closeBtn]);
 
