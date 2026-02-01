@@ -5,11 +5,12 @@
 const W = 800;
 const H = 450;
 
-const SCAM_LINES = [
-  const BUBBLE_CHANCE = 0.45;        // 45% of bots get bubbles at all
-const BUBBLE_ON_MS = [900, 1600];  // how long a bubble stays visible
-const BUBBLE_OFF_MS = [900, 2400]; // how long until it shows again
+// Bubble behavior (sporadic)
+const BUBBLE_CHANCE = 0.45;        // % of bots that have bubbles at all
+const BUBBLE_ON_MS = [900, 1600];  // bubble visible duration range
+const BUBBLE_OFF_MS = [900, 2400]; // hidden duration range
 
+const SCAM_LINES = [
   "Link wallet to claim",
   "Urgent: wallet compromised",
   "Send 0.5 SOL to verify",
@@ -147,7 +148,9 @@ class DevBotDodger extends Phaser.Scene {
       color: "#e6edf3",
     }).setOrigin(0.5);
 
-    const howText = this.add.text(W / 2, H / 2 - 38,
+    const howText = this.add.text(
+      W / 2,
+      H / 2 - 38,
       "• Move: WASD / Arrow Keys\n• Mobile: touch left side for joystick\n• Survive: avoid bots + scam bubbles\n• Score: time survived\n\nTip: Keep moving. Don’t get cornered.",
       {
         fontFamily: "system-ui, Arial",
@@ -214,12 +217,8 @@ class DevBotDodger extends Phaser.Scene {
 
     const hit = this.add.rectangle(0, 0, w, h, 0x000000, 0).setInteractive({ useHandCursor: true });
 
-    hit.on("pointerover", () => {
-      bg.setFillStyle(subtle ? 0x0f172a : 0x334155, 1);
-    });
-    hit.on("pointerout", () => {
-      bg.setFillStyle(subtle ? 0x111827 : 0x1f2937, 1);
-    });
+    hit.on("pointerover", () => bg.setFillStyle(subtle ? 0x0f172a : 0x334155, 1));
+    hit.on("pointerout", () => bg.setFillStyle(subtle ? 0x111827 : 0x1f2937, 1));
     hit.on("pointerdown", onClick);
 
     c.add([bg, text, hit]);
@@ -250,7 +249,6 @@ class DevBotDodger extends Phaser.Scene {
 
   onPrimaryAction() {
     if (this.state === "MENU") {
-      // If how-to is open, close it; else Play
       if (this.menuUI._howPanel.visible) this.toggleHowTo();
       else this.startGame();
     } else if (this.state === "GAMEOVER") {
@@ -263,13 +261,11 @@ class DevBotDodger extends Phaser.Scene {
     this.menuUI.setVisible(true);
     this.gameOverUI.setVisible(false);
 
-    // Reset player position and clear enemies
     this.clearBots();
     this.player.x = W / 2;
     this.player.y = H / 2;
     this.player.fillColor = 0x22c55e;
 
-    // Freeze timer display on menu
     this.elapsedSeconds = 0;
     this.timeText.setText("Uptime: 00:00");
   }
@@ -280,7 +276,6 @@ class DevBotDodger extends Phaser.Scene {
     this.gameOverUI.setVisible(false);
     this.menuUI._howPanel.setVisible(false);
 
-    // Reset run data
     this.clearBots();
     this.player.x = W / 2;
     this.player.y = H / 2;
@@ -294,7 +289,6 @@ class DevBotDodger extends Phaser.Scene {
   }
 
   restartToMenu(showMenu = true) {
-    // showMenu=false means we go straight into PLAY again
     if (showMenu) this.enterMenu();
     else this.startGame();
   }
@@ -383,81 +377,57 @@ class DevBotDodger extends Phaser.Scene {
     const bot = this.add.rectangle(x, y, 18, 18, 0xef4444, 1);
     bot.setStrokeStyle(2, 0x7f1d1d, 0.9);
 
-   const hasBubble = Math.random() < BUBBLE_CHANCE;
+    // Sporadic bubbles: many bots have none
+    const hasBubble = Math.random() < BUBBLE_CHANCE;
 
-let bubble = null;
-let bobTween = null;
+    let bubble = null;
+    let bobTween = null;
 
-if (hasBubble) {
-  bubble = this.add.text(x, y - 26, randItem(SCAM_LINES), {
-    fontFamily: "system-ui, Arial",
-    fontSize: "12px",
-    color: "#e6edf3",
-    backgroundColor: "rgba(15,23,42,0.85)",
-    padding: { left: 8, right: 8, top: 4, bottom: 4 },
-  }).setOrigin(0.5);
+    if (hasBubble) {
+      bubble = this.add.text(x, y - 26, randItem(SCAM_LINES), {
+        fontFamily: "system-ui, Arial",
+        fontSize: "12px",
+        color: "#e6edf3",
+        backgroundColor: "rgba(15,23,42,0.85)",
+        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+      }).setOrigin(0.5);
 
-  bubble.setStroke("#0b0f14", 4);
+      bubble.setStroke("#0b0f14", 4);
 
-  // Start hidden or visible randomly
-  const startVisible = Math.random() < 0.5;
-  bubble.setAlpha(startVisible ? 1 : 0);
-  bubble.setScale(1);
+      // Start hidden or visible randomly
+      const startVisible = Math.random() < 0.5;
+      bubble.setAlpha(startVisible ? 1 : 0);
+      bubble.setScale(1);
 
-  // Gentle bob (only matters when visible, but cheap)
-  bobTween = this.tweens.add({
-    targets: bubble,
-    y: bubble.y - 6,
-    duration: 700,
-    yoyo: true,
-    repeat: -1,
-    ease: "Sine.InOut",
-  });
-}
-
-this.bots.push({
-  bot,
-  bubble,
-  bobTween,
-  speed: 70 + speedBoost,
-
-  // bubble scheduling
-  hasBubble,
-  bubbleVisible: hasBubble ? (bubble.alpha > 0) : false,
-  bubbleNextAt: hasBubble
-    ? (this.time.now + Phaser.Math.Between(300, 1200))
-    : 0,
-});
-
-
-    // --- Bubble bobbing (gentle float)
-    const bobTween = this.tweens.add({
-      targets: bubble,
-      y: bubble.y - 6,
-      duration: 700,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.InOut",
-    });
+      // Gentle bob
+      bobTween = this.tweens.add({
+        targets: bubble,
+        y: bubble.y - 6,
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.InOut",
+      });
+    }
 
     this.bots.push({
       bot,
       bubble,
       bobTween,
       speed: 70 + speedBoost,
-      nextBubbleSwapAt: this.time.now + Phaser.Math.Between(900, 1600),
+      hasBubble,
+      bubbleNextAt: hasBubble ? (this.time.now + Phaser.Math.Between(300, 1200)) : 0,
     });
   }
 
   clearBots() {
-  for (const b of this.bots) {
-    if (b.bobTween) b.bobTween.stop();
-    if (b.bot) b.bot.destroy();
-    if (b.bubble) b.bubble.destroy();
+    for (const b of this.bots) {
+      if (b.bobTween) b.bobTween.stop();
+      if (b.bot) b.bot.destroy();
+      if (b.bubble) b.bubble.destroy();
+    }
+    this.bots = [];
   }
-  this.bots = [];
-}
-
 
   // ---------- GAME LOOP ----------
 
@@ -506,48 +476,46 @@ this.bots.push({
       b.bot.x += (dx / d) * b.speed * (delta / 1000);
       b.bot.y += (dy / d) * b.speed * (delta / 1000);
 
+      // Bubble follow + sporadic show/hide
       if (b.hasBubble && b.bubble) {
-  // follow bot
-  b.bubble.x = b.bot.x;
-  b.bubble.y = b.bot.y - 28;
+        b.bubble.x = b.bot.x;
+        b.bubble.y = b.bot.y - 28;
 
-  // sporadic show/hide cycle
-  if (time >= b.bubbleNextAt && !b.bubble._cycleBusy) {
-    b.bubble._cycleBusy = true;
+        if (time >= b.bubbleNextAt && !b.bubble._cycleBusy) {
+          b.bubble._cycleBusy = true;
 
-    // If currently hidden -> show (new message)
-    if (b.bubble.alpha < 0.05) {
-      b.bubble.setText(randItem(SCAM_LINES));
-      b.bubble.setScale(0.96);
+          if (b.bubble.alpha < 0.05) {
+            // show with new message
+            b.bubble.setText(randItem(SCAM_LINES));
+            b.bubble.setScale(0.96);
 
-      this.tweens.add({
-        targets: b.bubble,
-        alpha: 1,
-        scale: 1,
-        duration: 180,
-        ease: "Back.Out",
-        onComplete: () => {
-          b.bubble._cycleBusy = false;
-          b.bubbleNextAt = time + Phaser.Math.Between(BUBBLE_ON_MS[0], BUBBLE_ON_MS[1]);
-        },
-      });
-    } else {
-      // currently visible -> hide
-      this.tweens.add({
-        targets: b.bubble,
-        alpha: 0,
-        scale: 0.98,
-        duration: 160,
-        ease: "Sine.In",
-        onComplete: () => {
-          b.bubble._cycleBusy = false;
-          b.bubbleNextAt = time + Phaser.Math.Between(BUBBLE_OFF_MS[0], BUBBLE_OFF_MS[1]);
-        },
-      });
-    }
-  }
-}
-
+            this.tweens.add({
+              targets: b.bubble,
+              alpha: 1,
+              scale: 1,
+              duration: 180,
+              ease: "Back.Out",
+              onComplete: () => {
+                b.bubble._cycleBusy = false;
+                b.bubbleNextAt = time + Phaser.Math.Between(BUBBLE_ON_MS[0], BUBBLE_ON_MS[1]);
+              },
+            });
+          } else {
+            // hide
+            this.tweens.add({
+              targets: b.bubble,
+              alpha: 0,
+              scale: 0.98,
+              duration: 160,
+              ease: "Sine.In",
+              onComplete: () => {
+                b.bubble._cycleBusy = false;
+                b.bubbleNextAt = time + Phaser.Math.Between(BUBBLE_OFF_MS[0], BUBBLE_OFF_MS[1]);
+              },
+            });
+          }
+        }
+      }
 
       const hit = Math.abs(this.player.x - b.bot.x) < 16 && Math.abs(this.player.y - b.bot.y) < 16;
       if (hit) {
