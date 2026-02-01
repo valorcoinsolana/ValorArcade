@@ -6,6 +6,10 @@ const W = 800;
 const H = 450;
 
 const SCAM_LINES = [
+  const BUBBLE_CHANCE = 0.45;        // 45% of bots get bubbles at all
+const BUBBLE_ON_MS = [900, 1600];  // how long a bubble stays visible
+const BUBBLE_OFF_MS = [900, 2400]; // how long until it shows again
+
   "Link wallet to claim",
   "Urgent: wallet compromised",
   "Send 0.5 SOL to verify",
@@ -379,27 +383,52 @@ class DevBotDodger extends Phaser.Scene {
     const bot = this.add.rectangle(x, y, 18, 18, 0xef4444, 1);
     bot.setStrokeStyle(2, 0x7f1d1d, 0.9);
 
-    const bubble = this.add.text(x, y - 26, randItem(SCAM_LINES), {
-      fontFamily: "system-ui, Arial",
-      fontSize: "12px",
-      color: "#e6edf3",
-      backgroundColor: "rgba(15,23,42,0.85)",
-      padding: { left: 8, right: 8, top: 4, bottom: 4 },
-    }).setOrigin(0.5);
+   const hasBubble = Math.random() < BUBBLE_CHANCE;
 
-    bubble.setStroke("#0b0f14", 4);
+let bubble = null;
+let bobTween = null;
 
-    // --- Bubble entrance animation (pop + fade in)
-    bubble.setAlpha(0);
-    bubble.setScale(0.92);
+if (hasBubble) {
+  bubble = this.add.text(x, y - 26, randItem(SCAM_LINES), {
+    fontFamily: "system-ui, Arial",
+    fontSize: "12px",
+    color: "#e6edf3",
+    backgroundColor: "rgba(15,23,42,0.85)",
+    padding: { left: 8, right: 8, top: 4, bottom: 4 },
+  }).setOrigin(0.5);
 
-    this.tweens.add({
-      targets: bubble,
-      alpha: 1,
-      scale: 1,
-      duration: 180,
-      ease: "Back.Out",
-    });
+  bubble.setStroke("#0b0f14", 4);
+
+  // Start hidden or visible randomly
+  const startVisible = Math.random() < 0.5;
+  bubble.setAlpha(startVisible ? 1 : 0);
+  bubble.setScale(1);
+
+  // Gentle bob (only matters when visible, but cheap)
+  bobTween = this.tweens.add({
+    targets: bubble,
+    y: bubble.y - 6,
+    duration: 700,
+    yoyo: true,
+    repeat: -1,
+    ease: "Sine.InOut",
+  });
+}
+
+this.bots.push({
+  bot,
+  bubble,
+  bobTween,
+  speed: 70 + speedBoost,
+
+  // bubble scheduling
+  hasBubble,
+  bubbleVisible: hasBubble ? (bubble.alpha > 0) : false,
+  bubbleNextAt: hasBubble
+    ? (this.time.now + Phaser.Math.Between(300, 1200))
+    : 0,
+});
+
 
     // --- Bubble bobbing (gentle float)
     const bobTween = this.tweens.add({
@@ -421,13 +450,14 @@ class DevBotDodger extends Phaser.Scene {
   }
 
   clearBots() {
-    for (const b of this.bots) {
-      if (b.bobTween) b.bobTween.stop();
-      b.bot.destroy();
-      b.bubble.destroy();
-    }
-    this.bots = [];
+  for (const b of this.bots) {
+    if (b.bobTween) b.bobTween.stop();
+    if (b.bot) b.bot.destroy();
+    if (b.bubble) b.bubble.destroy();
   }
+  this.bots = [];
+}
+
 
   // ---------- GAME LOOP ----------
 
@@ -476,38 +506,48 @@ class DevBotDodger extends Phaser.Scene {
       b.bot.x += (dx / d) * b.speed * (delta / 1000);
       b.bot.y += (dy / d) * b.speed * (delta / 1000);
 
-      b.bubble.x = b.bot.x;
-      b.bubble.y = b.bot.y - 28;
+      if (b.hasBubble && b.bubble) {
+  // follow bot
+  b.bubble.x = b.bot.x;
+  b.bubble.y = b.bot.y - 28;
 
-      // --- Bubble fade-out -> change text -> fade-in occasionally
-      if (time >= b.nextBubbleSwapAt) {
-        b.nextBubbleSwapAt = time + Phaser.Math.Between(1200, 2200);
+  // sporadic show/hide cycle
+  if (time >= b.bubbleNextAt && !b.bubble._cycleBusy) {
+    b.bubble._cycleBusy = true;
 
-        if (!b.bubble._swapBusy) {
-          b.bubble._swapBusy = true;
+    // If currently hidden -> show (new message)
+    if (b.bubble.alpha < 0.05) {
+      b.bubble.setText(randItem(SCAM_LINES));
+      b.bubble.setScale(0.96);
 
-          this.tweens.add({
-            targets: b.bubble,
-            alpha: 0,
-            scale: 0.96,
-            duration: 140,
-            ease: "Sine.In",
-            onComplete: () => {
-              b.bubble.setText(randItem(SCAM_LINES));
-              this.tweens.add({
-                targets: b.bubble,
-                alpha: 1,
-                scale: 1,
-                duration: 160,
-                ease: "Sine.Out",
-                onComplete: () => {
-                  b.bubble._swapBusy = false;
-                },
-              });
-            },
-          });
-        }
-      }
+      this.tweens.add({
+        targets: b.bubble,
+        alpha: 1,
+        scale: 1,
+        duration: 180,
+        ease: "Back.Out",
+        onComplete: () => {
+          b.bubble._cycleBusy = false;
+          b.bubbleNextAt = time + Phaser.Math.Between(BUBBLE_ON_MS[0], BUBBLE_ON_MS[1]);
+        },
+      });
+    } else {
+      // currently visible -> hide
+      this.tweens.add({
+        targets: b.bubble,
+        alpha: 0,
+        scale: 0.98,
+        duration: 160,
+        ease: "Sine.In",
+        onComplete: () => {
+          b.bubble._cycleBusy = false;
+          b.bubbleNextAt = time + Phaser.Math.Between(BUBBLE_OFF_MS[0], BUBBLE_OFF_MS[1]);
+        },
+      });
+    }
+  }
+}
+
 
       const hit = Math.abs(this.player.x - b.bot.x) < 16 && Math.abs(this.player.y - b.bot.y) < 16;
       if (hit) {
