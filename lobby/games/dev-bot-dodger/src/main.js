@@ -83,7 +83,7 @@ class DevBotDodger extends Phaser.Scene {
     this.startTime = 0;
     this.elapsedSeconds = 0;
     this.spawnTimer = 0;
-    this.spawnInterval = 1200; // will be updated in update()
+    this.spawnInterval = 1200; // updated in update()
 
     // Touch joystick (only used in PLAY)
     this.joy = this.createJoystick();
@@ -92,10 +92,13 @@ class DevBotDodger extends Phaser.Scene {
     this.menuUI = this.buildMenuUI();
     this.gameOverUI = this.buildGameOverUI();
 
-    // Global pointer handler: allow buttons to work; otherwise ignore
+    // Keep UI above bots always
+    this.menuUI.setDepth(1000);
+    this.gameOverUI.setDepth(1000);
+
+    // Global pointer handler
     this.input.on("pointerdown", (p) => {
       if (this.state === "GAMEOVER") {
-        // Tap anywhere on game over to retry (nice on mobile)
         if (!this.isPointerOnButton(p)) this.restartToMenu(false);
       }
     });
@@ -137,7 +140,7 @@ class DevBotDodger extends Phaser.Scene {
     const playBtn = this.makeButton(W / 2, H / 2 + 6, 220, 44, "PLAY", () => this.startGame());
     const howBtn = this.makeButton(W / 2, H / 2 + 62, 220, 38, "HOW TO PLAY", () => this.toggleHowTo(), true);
 
-    // How-to panel (hidden by default)
+    // How-to panel
     const howPanel = this.add.container(0, 0).setVisible(false);
     const howBox = this.add.rectangle(W / 2, H / 2 + 24, 520, 260, 0x0b0f14, 0.96);
     howBox.setStrokeStyle(2, 0x334155, 1);
@@ -222,9 +225,7 @@ class DevBotDodger extends Phaser.Scene {
     hit.on("pointerdown", onClick);
 
     c.add([bg, text, hit]);
-    c._hit = hit;
     c._w = w; c._h = h;
-    c._cx = cx; c._cy = cy;
     return c;
   }
 
@@ -377,7 +378,6 @@ class DevBotDodger extends Phaser.Scene {
     const bot = this.add.rectangle(x, y, 18, 18, 0xef4444, 1);
     bot.setStrokeStyle(2, 0x7f1d1d, 0.9);
 
-    // Sporadic bubbles: many bots have none
     const hasBubble = Math.random() < BUBBLE_CHANCE;
 
     let bubble = null;
@@ -394,12 +394,10 @@ class DevBotDodger extends Phaser.Scene {
 
       bubble.setStroke("#0b0f14", 4);
 
-      // Start hidden or visible randomly
       const startVisible = Math.random() < 0.5;
       bubble.setAlpha(startVisible ? 1 : 0);
       bubble.setScale(1);
 
-      // Gentle bob
       bobTween = this.tweens.add({
         targets: bubble,
         y: bubble.y - 6,
@@ -440,7 +438,7 @@ class DevBotDodger extends Phaser.Scene {
     const ss = this.elapsedSeconds % 60;
     this.timeText.setText(`Uptime: ${pad2(mm)}:${pad2(ss)}`);
 
-    // Difficulty ramp (slower)
+    // Difficulty ramp
     const t = this.elapsedSeconds;
     this.spawnInterval = clamp(1200 - t * 6, 450, 1200);
     const speedBoost = clamp(t * 1.0, 0, 140);
@@ -452,7 +450,7 @@ class DevBotDodger extends Phaser.Scene {
       this.spawnBot(speedBoost);
     }
 
-    // Movement (keyboard + joystick)
+    // Movement
     let ix = 0, iy = 0;
     if (this.cursors.left.isDown || this.keys.A.isDown) ix -= 1;
     if (this.cursors.right.isDown || this.keys.D.isDown) ix += 1;
@@ -485,7 +483,6 @@ class DevBotDodger extends Phaser.Scene {
           b.bubble._cycleBusy = true;
 
           if (b.bubble.alpha < 0.05) {
-            // show with new message
             b.bubble.setText(randItem(SCAM_LINES));
             b.bubble.setScale(0.96);
 
@@ -501,7 +498,6 @@ class DevBotDodger extends Phaser.Scene {
               },
             });
           } else {
-            // hide
             this.tweens.add({
               targets: b.bubble,
               alpha: 0,
@@ -526,6 +522,7 @@ class DevBotDodger extends Phaser.Scene {
   }
 
   gameOver() {
+    if (this.state === "GAMEOVER") return; // guard
     this.state = "GAMEOVER";
     this.player.fillColor = 0xf97316;
 
@@ -533,24 +530,17 @@ class DevBotDodger extends Phaser.Scene {
     const ss = this.elapsedSeconds % 60;
     this.gameOverUI._scoreText.setText(`Uptime survived: ${pad2(mm)}:${pad2(ss)}`);
 
-    gameOver() {
-  this.state = "GAMEOVER";
-  this.player.fillColor = 0xf97316;
+    this.gameOverUI.setVisible(true);
 
-  const mm = Math.floor(this.elapsedSeconds / 60);
-  const ss = this.elapsedSeconds % 60;
-  this.gameOverUI._scoreText.setText(`Uptime survived: ${pad2(mm)}:${pad2(ss)}`);
-
-  this.gameOverUI.setVisible(true);
-
-  // Fade bots/bubbles behind the overlay so the screen is readable
-  for (const b of this.bots) {
-    this.tweens.add({
-      targets: [b.bot, b.bubble].filter(Boolean),
-      alpha: 0.25,
-      duration: 180,
-      ease: "Sine.Out",
-    });
+    // Fade bots/bubbles behind overlay
+    for (const b of this.bots) {
+      this.tweens.add({
+        targets: [b.bot, b.bubble].filter(Boolean),
+        alpha: 0.25,
+        duration: 180,
+        ease: "Sine.Out",
+      });
+    }
   }
 }
 
