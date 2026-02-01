@@ -1,4 +1,5 @@
-// Dev Bot Dodger - Phaser 3 single-file game scene
+// Dev Bot Dodger - Phaser 3
+// Start Menu -> Play -> Game Over
 // Drop-in for: lobby/games/dev-bot-dodger/src/main.js
 
 const W = 800;
@@ -8,7 +9,7 @@ const SCAM_LINES = [
   "Link wallet to claim",
   "Urgent: wallet compromised",
   "Send 0.5 SOL to verify",
-  "AirDrop ending in 5 mins",
+  "AirDrop ending soon",
   "Click to mint for free",
   "Support here: dm admin",
   "Your account is flagged",
@@ -24,7 +25,7 @@ function pad2(n) { return String(n).padStart(2, "0"); }
 class DevBotDodger extends Phaser.Scene {
   constructor() {
     super("DevBotDodger");
-    this.state = "PLAY"; // PLAY | GAMEOVER
+    this.state = "MENU"; // MENU | PLAY | GAMEOVER
   }
 
   create() {
@@ -42,7 +43,7 @@ class DevBotDodger extends Phaser.Scene {
       );
     }
 
-    // HUD
+    // HUD (always present)
     this.titleText = this.add.text(16, 10, "Dev Bot Dodger", {
       fontFamily: "system-ui, Arial",
       fontSize: "18px",
@@ -63,54 +64,240 @@ class DevBotDodger extends Phaser.Scene {
 
     // Player
     this.player = this.add.rectangle(W / 2, H / 2, 18, 18, 0x22c55e, 1);
-    this.playerSpeed = 220; // px/sec
+    this.playerSpeed = 220;
 
-    // Keyboard
+    // Input
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys("W,A,S,D,R");
+    this.keys = this.input.keyboard.addKeys("W,A,S,D,R,H,ENTER,SPACE");
 
-    // Enemies container
+    // Enemies
     this.bots = [];
+    this.maxBots = 35;
 
-    // Difficulty / spawning
-    this.startTime = this.time.now;
+    // Difficulty / spawning (only active in PLAY)
+    this.startTime = 0;
     this.elapsedSeconds = 0;
-
     this.spawnTimer = 0;
-    this.spawnInterval = 900; // ms, will ramp down
-    this.maxBots = 60;
+    this.spawnInterval = 1200; // will be updated in update()
 
-    // Game over UI
-    this.gameOverTitle = this.add.text(W / 2, H / 2 - 18, "", {
+    // Touch joystick (only used in PLAY)
+    this.joy = this.createJoystick();
+
+    // UI layers
+    this.menuUI = this.buildMenuUI();
+    this.gameOverUI = this.buildGameOverUI();
+
+    // Global pointer handler: allow buttons to work; otherwise ignore
+    this.input.on("pointerdown", (p) => {
+      if (this.state === "GAMEOVER") {
+        // Tap anywhere on game over to retry (nice on mobile)
+        if (!this.isPointerOnButton(p)) this.restartToMenu(false);
+      }
+    });
+
+    // Keyboard shortcuts
+    this.keys.ENTER.on("down", () => this.onPrimaryAction());
+    this.keys.SPACE.on("down", () => this.onPrimaryAction());
+    this.keys.H.on("down", () => {
+      if (this.state === "MENU") this.toggleHowTo();
+    });
+    this.keys.R.on("down", () => {
+      if (this.state === "GAMEOVER") this.restartToMenu(false);
+    });
+
+    // Start at menu
+    this.enterMenu();
+  }
+
+  // ---------- MENU / GAMEOVER UI ----------
+
+  buildMenuUI() {
+    const ui = this.add.container(0, 0);
+
+    const panel = this.add.rectangle(W / 2, H / 2, 520, 260, 0x0f172a, 0.96);
+    panel.setStrokeStyle(2, 0x1f2937, 1);
+
+    const title = this.add.text(W / 2, H / 2 - 92, "DEV BOT DODGER", {
       fontFamily: "system-ui, Arial",
       fontSize: "34px",
       color: "#e6edf3",
     }).setOrigin(0.5);
 
-    this.gameOverSub = this.add.text(W / 2, H / 2 + 22, "", {
+    const subtitle = this.add.text(W / 2, H / 2 - 52, "Dodge scam bots as long as possible.", {
       fontFamily: "system-ui, Arial",
       fontSize: "14px",
       color: "#cbd5e1",
     }).setOrigin(0.5);
 
-    // Touch joystick
-    this.joy = this.createJoystick();
+    const playBtn = this.makeButton(W / 2, H / 2 + 6, 220, 44, "PLAY", () => this.startGame());
+    const howBtn = this.makeButton(W / 2, H / 2 + 62, 220, 38, "HOW TO PLAY", () => this.toggleHowTo(), true);
 
-    // Restart triggers
-    this.input.on("pointerdown", () => {
-      if (this.state === "GAMEOVER") this.restart();
-    });
+    // How-to panel (hidden by default)
+    const howPanel = this.add.container(0, 0).setVisible(false);
+    const howBox = this.add.rectangle(W / 2, H / 2 + 24, 520, 260, 0x0b0f14, 0.96);
+    howBox.setStrokeStyle(2, 0x334155, 1);
 
-    this.keys.R.on("down", () => {
-      if (this.state === "GAMEOVER") this.restart();
-    });
+    const howTitle = this.add.text(W / 2, H / 2 - 82, "How to Play", {
+      fontFamily: "system-ui, Arial",
+      fontSize: "22px",
+      color: "#e6edf3",
+    }).setOrigin(0.5);
+
+    const howText = this.add.text(W / 2, H / 2 - 38,
+      "• Move: WASD / Arrow Keys\n• Mobile: touch left side for joystick\n• Survive: avoid bots + scam bubbles\n• Score: time survived\n\nTip: Keep moving. Don’t get cornered.",
+      {
+        fontFamily: "system-ui, Arial",
+        fontSize: "14px",
+        color: "#cbd5e1",
+        align: "left",
+        lineSpacing: 6,
+      }
+    ).setOrigin(0.5, 0);
+
+    const closeBtn = this.makeButton(W / 2, H / 2 + 92, 220, 40, "BACK", () => this.toggleHowTo());
+
+    howPanel.add([howBox, howTitle, howText, closeBtn]);
+
+    ui.add([panel, title, subtitle, playBtn, howBtn, howPanel]);
+
+    ui._howPanel = howPanel;
+    ui._buttons = [playBtn, howBtn, closeBtn];
+    return ui;
   }
 
+  buildGameOverUI() {
+    const ui = this.add.container(0, 0).setVisible(false);
+
+    const panel = this.add.rectangle(W / 2, H / 2, 520, 240, 0x0f172a, 0.96);
+    panel.setStrokeStyle(2, 0x1f2937, 1);
+
+    const title = this.add.text(W / 2, H / 2 - 70, "YOU GOT RUGGED.", {
+      fontFamily: "system-ui, Arial",
+      fontSize: "32px",
+      color: "#e6edf3",
+    }).setOrigin(0.5);
+
+    const score = this.add.text(W / 2, H / 2 - 30, "", {
+      fontFamily: "system-ui, Arial",
+      fontSize: "14px",
+      color: "#cbd5e1",
+    }).setOrigin(0.5);
+
+    const retryBtn = this.makeButton(W / 2, H / 2 + 26, 220, 44, "RETRY", () => this.restartToMenu(false));
+    const hint = this.add.text(W / 2, H / 2 + 78, "Press R • Tap anywhere • Enter/Space", {
+      fontFamily: "system-ui, Arial",
+      fontSize: "12px",
+      color: "#64748b",
+    }).setOrigin(0.5);
+
+    ui.add([panel, title, score, retryBtn, hint]);
+    ui._scoreText = score;
+    ui._buttons = [retryBtn];
+    return ui;
+  }
+
+  makeButton(cx, cy, w, h, label, onClick, subtle = false) {
+    const c = this.add.container(cx, cy);
+
+    const bg = this.add.rectangle(0, 0, w, h, subtle ? 0x111827 : 0x1f2937, 1);
+    bg.setStrokeStyle(1, subtle ? 0x334155 : 0x475569, 1);
+
+    const text = this.add.text(0, 0, label, {
+      fontFamily: "system-ui, Arial",
+      fontSize: subtle ? "14px" : "16px",
+      color: subtle ? "#cbd5e1" : "#e6edf3",
+    }).setOrigin(0.5);
+
+    const hit = this.add.rectangle(0, 0, w, h, 0x000000, 0).setInteractive({ useHandCursor: true });
+
+    hit.on("pointerover", () => {
+      bg.setFillStyle(subtle ? 0x0f172a : 0x334155, 1);
+    });
+    hit.on("pointerout", () => {
+      bg.setFillStyle(subtle ? 0x111827 : 0x1f2937, 1);
+    });
+    hit.on("pointerdown", onClick);
+
+    c.add([bg, text, hit]);
+    c._hit = hit;
+    c._w = w; c._h = h;
+    c._cx = cx; c._cy = cy;
+    return c;
+  }
+
+  isPointerOnButton(p) {
+    const buttons = [];
+    if (this.menuUI && this.menuUI.visible) buttons.push(...this.menuUI._buttons);
+    if (this.gameOverUI && this.gameOverUI.visible) buttons.push(...this.gameOverUI._buttons);
+    for (const b of buttons) {
+      const left = b.x - b._w / 2;
+      const right = b.x + b._w / 2;
+      const top = b.y - b._h / 2;
+      const bottom = b.y + b._h / 2;
+      if (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom) return true;
+    }
+    return false;
+  }
+
+  toggleHowTo() {
+    const how = this.menuUI._howPanel;
+    how.setVisible(!how.visible);
+  }
+
+  onPrimaryAction() {
+    if (this.state === "MENU") {
+      // If how-to is open, close it; else Play
+      if (this.menuUI._howPanel.visible) this.toggleHowTo();
+      else this.startGame();
+    } else if (this.state === "GAMEOVER") {
+      this.restartToMenu(false);
+    }
+  }
+
+  enterMenu() {
+    this.state = "MENU";
+    this.menuUI.setVisible(true);
+    this.gameOverUI.setVisible(false);
+
+    // Reset player position and clear enemies
+    this.clearBots();
+    this.player.x = W / 2;
+    this.player.y = H / 2;
+    this.player.fillColor = 0x22c55e;
+
+    // Freeze timer display on menu
+    this.elapsedSeconds = 0;
+    this.timeText.setText("Uptime: 00:00");
+  }
+
+  startGame() {
+    this.state = "PLAY";
+    this.menuUI.setVisible(false);
+    this.gameOverUI.setVisible(false);
+    this.menuUI._howPanel.setVisible(false);
+
+    // Reset run data
+    this.clearBots();
+    this.player.x = W / 2;
+    this.player.y = H / 2;
+    this.player.fillColor = 0x22c55e;
+
+    this.startTime = this.time.now;
+    this.elapsedSeconds = 0;
+    this.spawnTimer = 0;
+    this.spawnInterval = 1200;
+    this.timeText.setText("Uptime: 00:00");
+  }
+
+  restartToMenu(showMenu = true) {
+    // showMenu=false means we go straight into PLAY again
+    if (showMenu) this.enterMenu();
+    else this.startGame();
+  }
+
+  // ---------- JOYSTICK ----------
+
   createJoystick() {
-    // A very simple on-screen joystick:
-    // - Appears when touch starts on left half
-    // - Knob follows within radius
-    // - Produces normalized dx/dy in [-1..1]
     const base = this.add.circle(90, H - 90, 44, 0x111827, 0.6).setVisible(false);
     base.setStrokeStyle(2, 0x334155, 0.8);
 
@@ -130,7 +317,6 @@ class DevBotDodger extends Phaser.Scene {
     };
 
     this.input.on("pointerdown", (p) => {
-      // only start joystick if touch/click begins on left side, not on UI
       if (this.state !== "PLAY") return;
       if (p.x > W * 0.55) return;
 
@@ -157,7 +343,6 @@ class DevBotDodger extends Phaser.Scene {
 
       joy.knob.setPosition(joy.cx + sx, joy.cy + sy);
 
-      // Normalize to [-1..1]
       joy.dx = clamp(sx / max, -1, 1);
       joy.dy = clamp(sy / max, -1, 1);
     });
@@ -178,16 +363,18 @@ class DevBotDodger extends Phaser.Scene {
     return joy;
   }
 
-  spawnBot() {
+  // ---------- ENEMIES ----------
+
+  spawnBot(speedBoost) {
     if (this.bots.length >= this.maxBots) return;
 
     const side = Phaser.Math.Between(0, 3);
     let x, y;
 
-    if (side === 0) { x = -20; y = Phaser.Math.Between(0, H); } // left
-    if (side === 1) { x = W + 20; y = Phaser.Math.Between(0, H); } // right
-    if (side === 2) { x = Phaser.Math.Between(0, W); y = -20; } // top
-    if (side === 3) { x = Phaser.Math.Between(0, W); y = H + 20; } // bottom
+    if (side === 0) { x = -20; y = Phaser.Math.Between(0, H); }
+    if (side === 1) { x = W + 20; y = Phaser.Math.Between(0, H); }
+    if (side === 2) { x = Phaser.Math.Between(0, W); y = -20; }
+    if (side === 3) { x = Phaser.Math.Between(0, W); y = H + 20; }
 
     const bot = this.add.rectangle(x, y, 18, 18, 0xef4444, 1);
     bot.setStrokeStyle(2, 0x7f1d1d, 0.9);
@@ -200,18 +387,24 @@ class DevBotDodger extends Phaser.Scene {
       padding: { left: 8, right: 8, top: 4, bottom: 4 },
     }).setOrigin(0.5);
 
-    // Add a subtle outline by stroke (Phaser text stroke)
     bubble.setStroke("#0b0f14", 4);
 
-    const speedBase = 70; // base bot speed
-    const botObj = {
+    this.bots.push({
       bot,
       bubble,
-      speed: speedBase,
-    };
-
-    this.bots.push(botObj);
+      speed: 70 + speedBoost,
+    });
   }
+
+  clearBots() {
+    for (const b of this.bots) {
+      b.bot.destroy();
+      b.bubble.destroy();
+    }
+    this.bots = [];
+  }
+
+  // ---------- GAME LOOP ----------
 
   update(time, delta) {
     if (this.state !== "PLAY") return;
@@ -222,63 +415,45 @@ class DevBotDodger extends Phaser.Scene {
     const ss = this.elapsedSeconds % 60;
     this.timeText.setText(`Uptime: ${pad2(mm)}:${pad2(ss)}`);
 
-    // Difficulty ramp
-    // - increase spawn rate
-    // - increase bot speed slowly
+    // Difficulty ramp (slower)
     const t = this.elapsedSeconds;
-    this.spawnInterval = clamp(1200 - t * 6, 450, 1200); // from 900ms down to 260ms
-    const botSpeedBoost = clamp(t * 1.2, 0, 180); // speed grows with time
+    this.spawnInterval = clamp(1200 - t * 6, 450, 1200);
+    const speedBoost = clamp(t * 1.0, 0, 140);
 
     // Spawn bots
     this.spawnTimer += delta;
     while (this.spawnTimer >= this.spawnInterval) {
       this.spawnTimer -= this.spawnInterval;
-      this.spawnBot();
+      this.spawnBot(speedBoost);
     }
 
-    // Movement input (keyboard + joystick)
+    // Movement (keyboard + joystick)
     let ix = 0, iy = 0;
-
-    // Keyboard
     if (this.cursors.left.isDown || this.keys.A.isDown) ix -= 1;
     if (this.cursors.right.isDown || this.keys.D.isDown) ix += 1;
     if (this.cursors.up.isDown || this.keys.W.isDown) iy -= 1;
     if (this.cursors.down.isDown || this.keys.S.isDown) iy += 1;
 
-    // Joystick overrides/adds
-    if (this.joy && this.joy.active) {
-      ix += this.joy.dx;
-      iy += this.joy.dy;
-    }
+    if (this.joy && this.joy.active) { ix += this.joy.dx; iy += this.joy.dy; }
 
-    // Normalize movement
     const len = Math.hypot(ix, iy);
     if (len > 0) { ix /= len; iy /= len; }
 
-    const px = this.player.x + ix * this.playerSpeed * (delta / 1000);
-    const py = this.player.y + iy * this.playerSpeed * (delta / 1000);
+    this.player.x = clamp(this.player.x + ix * this.playerSpeed * (delta / 1000), 12, W - 12);
+    this.player.y = clamp(this.player.y + iy * this.playerSpeed * (delta / 1000), 12, H - 12);
 
-    this.player.x = clamp(px, 12, W - 12);
-    this.player.y = clamp(py, 12, H - 12);
-
-    // Update bots: chase player, update bubbles, check collision
-    for (let i = 0; i < this.bots.length; i++) {
-      const b = this.bots[i];
-
+    // Bots chase + collision
+    for (const b of this.bots) {
       const dx = this.player.x - b.bot.x;
       const dy = this.player.y - b.bot.y;
       const d = Math.hypot(dx, dy) || 1;
 
-      const speed = b.speed + botSpeedBoost;
+      b.bot.x += (dx / d) * b.speed * (delta / 1000);
+      b.bot.y += (dy / d) * b.speed * (delta / 1000);
 
-      b.bot.x += (dx / d) * speed * (delta / 1000);
-      b.bot.y += (dy / d) * speed * (delta / 1000);
-
-      // Bubble follows
       b.bubble.x = b.bot.x;
       b.bubble.y = b.bot.y - 28;
 
-      // Collision (simple AABB using sizes)
       const hit = Math.abs(this.player.x - b.bot.x) < 16 && Math.abs(this.player.y - b.bot.y) < 16;
       if (hit) {
         this.gameOver();
@@ -289,37 +464,13 @@ class DevBotDodger extends Phaser.Scene {
 
   gameOver() {
     this.state = "GAMEOVER";
-
-    this.gameOverTitle.setText("You got rugged.");
-    this.gameOverSub.setText("Tap to retry • Press R");
-
-    // Freeze bots visually (no update since state changes)
-    // Optional: tint player red
     this.player.fillColor = 0xf97316;
-  }
 
-  restart() {
-    // Destroy bots and bubbles
-    for (const b of this.bots) {
-      b.bot.destroy();
-      b.bubble.destroy();
-    }
-    this.bots = [];
+    const mm = Math.floor(this.elapsedSeconds / 60);
+    const ss = this.elapsedSeconds % 60;
+    this.gameOverUI._scoreText.setText(`Uptime survived: ${pad2(mm)}:${pad2(ss)}`);
 
-    // Reset player
-    this.player.x = W / 2;
-    this.player.y = H / 2;
-    this.player.fillColor = 0x22c55e;
-
-    // Reset timers
-    this.startTime = this.time.now;
-    this.spawnTimer = 0;
-    this.elapsedSeconds = 0;
-
-    // Reset UI
-    this.gameOverTitle.setText("");
-    this.gameOverSub.setText("");
-    this.state = "PLAY";
+    this.gameOverUI.setVisible(true);
   }
 }
 
