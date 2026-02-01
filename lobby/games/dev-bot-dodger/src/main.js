@@ -389,15 +389,40 @@ class DevBotDodger extends Phaser.Scene {
 
     bubble.setStroke("#0b0f14", 4);
 
+    // --- Bubble entrance animation (pop + fade in)
+    bubble.setAlpha(0);
+    bubble.setScale(0.92);
+
+    this.tweens.add({
+      targets: bubble,
+      alpha: 1,
+      scale: 1,
+      duration: 180,
+      ease: "Back.Out",
+    });
+
+    // --- Bubble bobbing (gentle float)
+    const bobTween = this.tweens.add({
+      targets: bubble,
+      y: bubble.y - 6,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.InOut",
+    });
+
     this.bots.push({
       bot,
       bubble,
+      bobTween,
       speed: 70 + speedBoost,
+      nextBubbleSwapAt: this.time.now + Phaser.Math.Between(900, 1600),
     });
   }
 
   clearBots() {
     for (const b of this.bots) {
+      if (b.bobTween) b.bobTween.stop();
       b.bot.destroy();
       b.bubble.destroy();
     }
@@ -453,6 +478,36 @@ class DevBotDodger extends Phaser.Scene {
 
       b.bubble.x = b.bot.x;
       b.bubble.y = b.bot.y - 28;
+
+      // --- Bubble fade-out -> change text -> fade-in occasionally
+      if (time >= b.nextBubbleSwapAt) {
+        b.nextBubbleSwapAt = time + Phaser.Math.Between(1200, 2200);
+
+        if (!b.bubble._swapBusy) {
+          b.bubble._swapBusy = true;
+
+          this.tweens.add({
+            targets: b.bubble,
+            alpha: 0,
+            scale: 0.96,
+            duration: 140,
+            ease: "Sine.In",
+            onComplete: () => {
+              b.bubble.setText(randItem(SCAM_LINES));
+              this.tweens.add({
+                targets: b.bubble,
+                alpha: 1,
+                scale: 1,
+                duration: 160,
+                ease: "Sine.Out",
+                onComplete: () => {
+                  b.bubble._swapBusy = false;
+                },
+              });
+            },
+          });
+        }
+      }
 
       const hit = Math.abs(this.player.x - b.bot.x) < 16 && Math.abs(this.player.y - b.bot.y) < 16;
       if (hit) {
