@@ -8,8 +8,11 @@ const H = 450;
 // Assets
 const SPRITES_KEY = "devBotSprites";
 const SPRITES_URL = new URL("./assets/sprites/dev-bot-sprites.png", import.meta.url).toString();
- // relative to this file on GitHub Pages
 const FRAME = 16; // 16x16 frames
+
+// Background tile
+const BG_KEY = "bgTile";
+const BG_URL = new URL("./assets/backgrounds/bg-tile.png", import.meta.url).toString();
 
 // Bubble behavior (sporadic)
 const BUBBLE_CHANCE = 0.45;        // % of bots that have bubbles at all
@@ -45,6 +48,7 @@ class DevBotDodger extends Phaser.Scene {
 
   preload() {
     this.load.on("loaderror", (file) => console.error("ASSET LOAD ERROR:", file.src));
+
     // Sprite sheet: rows = dev / scam / admin / verified
     // columns: idle0 idle1 move0 move1 move2 move3  (6 frames across)
     this.load.spritesheet(SPRITES_KEY, SPRITES_URL, {
@@ -53,6 +57,9 @@ class DevBotDodger extends Phaser.Scene {
       margin: 0,
       spacing: 0,
     });
+
+    // Background tile
+    this.load.image(BG_KEY, BG_URL);
   }
 
   create() {
@@ -61,23 +68,18 @@ class DevBotDodger extends Phaser.Scene {
     if (this.textures?.get?.(SPRITES_KEY)) {
       this.textures.get(SPRITES_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
+    if (this.textures?.get?.(BG_KEY)) {
+      this.textures.get(BG_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
 
     // Animations (safe to call once; Phaser ignores duplicates if keys match)
     this.createAnimationsOnce();
 
-    // Background
-    this.add.rectangle(W / 2, H / 2, W, H, 0x0b0f14, 1);
-
-    // Subtle dots
-    const dots = this.add.graphics();
-    dots.fillStyle(0xffffff, 0.05);
-    for (let i = 0; i < 90; i++) {
-      dots.fillCircle(
-        Phaser.Math.Between(0, W),
-        Phaser.Math.Between(0, H),
-        Phaser.Math.Between(1, 2)
-      );
-    }
+    // Background (tiled)
+    this.bg = this.add.tileSprite(0, 0, W, H, BG_KEY)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(-100);
 
     // HUD (always present)
     this.titleText = this.add.text(16, 10, "Dev Bot Dodger", {
@@ -536,6 +538,12 @@ class DevBotDodger extends Phaser.Scene {
   // ---------- GAME LOOP ----------
 
   update(time, delta) {
+    if (this.bg) {
+      const s = delta / 16.67; // normalize to ~60fps
+      this.bg.tilePositionX += 0.15 * s;
+      this.bg.tilePositionY += 0.08 * s;
+    }
+
     if (this.state !== "PLAY") return;
 
     // Time survived
