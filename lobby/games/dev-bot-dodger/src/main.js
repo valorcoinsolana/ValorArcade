@@ -49,6 +49,9 @@ class DevBotDodger extends Phaser.Scene {
   preload() {
     this.load.on("loaderror", (file) => console.error("ASSET LOAD ERROR:", file.src));
 
+    // Background tile image
+    this.load.image(BG_KEY, BG_URL);
+
     // Sprite sheet: rows = dev / scam / admin / verified
     // columns: idle0 idle1 move0 move1 move2 move3  (6 frames across)
     this.load.spritesheet(SPRITES_KEY, SPRITES_URL, {
@@ -57,14 +60,13 @@ class DevBotDodger extends Phaser.Scene {
       margin: 0,
       spacing: 0,
     });
-
-    // Background tile
-    this.load.image(BG_KEY, BG_URL);
   }
 
   create() {
     // Pixel art crispness
     this.cameras.main.setRoundPixels(true);
+
+    // Ensure nearest filtering
     if (this.textures?.get?.(SPRITES_KEY)) {
       this.textures.get(SPRITES_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
@@ -75,35 +77,94 @@ class DevBotDodger extends Phaser.Scene {
     // Animations (safe to call once; Phaser ignores duplicates if keys match)
     this.createAnimationsOnce();
 
-    // Background (tiled)
-    this.bg = this.add.tileSprite(0, 0, W, H, BG_KEY)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(-100);
+    // ---------- BACKGROUND (2-layer parallax + vignette + glow) ----------
+
+    // Base dark underlay
+    this.add.rectangle(W / 2, H / 2, W, H, 0x05070a, 1).setDepth(-200);
+
+    // Tile layers (parallax)
+    this.bgFar = this.add.tileSprite(W / 2, H / 2, W, H, BG_KEY)
+      .setDepth(-150)
+      .setAlpha(0.55);
+
+    this.bgNear = this.add.tileSprite(W / 2, H / 2, W, H, BG_KEY)
+      .setDepth(-140)
+      .setAlpha(0.30);
+
+    // Subtle dots (keep your old vibe, but behind everything)
+    const dots = this.add.graphics().setDepth(-130);
+    dots.fillStyle(0xffffff, 0.04);
+    for (let i = 0; i < 70; i++) {
+      dots.fillCircle(
+        Phaser.Math.Between(0, W),
+        Phaser.Math.Between(0, H),
+        Phaser.Math.Between(1, 2)
+      );
+    }
+
+    // Center glow (very subtle)
+    this.centerGlow = this.add.circle(W / 2, H / 2, 180, 0x38bdf8, 0.05)
+      .setDepth(-120)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    // Cheap vignette: dark edge bands (looks surprisingly good in motion)
+    this.vignette = this.add.container(0, 0).setDepth(900); // above bg, below UI
+    const edgeA = 0.18;
+    const edgeB = 0.10;
+
+    // Top / Bottom
+    this.vignette.add(this.add.rectangle(W / 2, 0, W, 70, 0x000000, edgeA).setOrigin(0.5, 0));
+    this.vignette.add(this.add.rectangle(W / 2, H, W, 70, 0x000000, edgeA).setOrigin(0.5, 1));
+
+    // Left / Right
+    this.vignette.add(this.add.rectangle(0, H / 2, 70, H, 0x000000, edgeA).setOrigin(0, 0.5));
+    this.vignette.add(this.add.rectangle(W, H / 2, 70, H, 0x000000, edgeA).setOrigin(1, 0.5));
+
+    // Softer inner bands
+    this.vignette.add(this.add.rectangle(W / 2, 0, W, 40, 0x000000, edgeB).setOrigin(0.5, 0));
+    this.vignette.add(this.add.rectangle(W / 2, H, W, 40, 0x000000, edgeB).setOrigin(0.5, 1));
+    this.vignette.add(this.add.rectangle(0, H / 2, 40, H, 0x000000, edgeB).setOrigin(0, 0.5));
+    this.vignette.add(this.add.rectangle(W, H / 2, 40, H, 0x000000, edgeB).setOrigin(1, 0.5));
+
+    // ---------- HUD (glass bar behind text) ----------
+
+    this.hudBar = this.add.rectangle(W / 2, 26, W, 60, 0x0b0f14, 0.35)
+      .setDepth(950);
+    this.hudBar.setStrokeStyle(1, 0x1f2937, 0.35);
 
     // HUD (always present)
     this.titleText = this.add.text(16, 10, "Dev Bot Dodger", {
       fontFamily: "system-ui, Arial",
       fontSize: "18px",
       color: "#e6edf3",
-    });
+    }).setDepth(960);
 
     this.timeText = this.add.text(16, 34, "Uptime: 00:00", {
       fontFamily: "system-ui, Arial",
       fontSize: "14px",
       color: "#cbd5e1",
-    });
+    }).setDepth(960);
 
     this.hintText = this.add.text(W - 16, 12, "WASD/Arrows • Touch joystick", {
       fontFamily: "system-ui, Arial",
       fontSize: "12px",
-      color: "#64748b",
-    }).setOrigin(1, 0);
+      color: "#94a3b8",
+    }).setOrigin(1, 0).setDepth(960);
 
-    // Player (sprite)
+    // ---------- Player (sprite + shadow) ----------
+
+    this.playerShadow = this.add.sprite(W / 2 + 2, H / 2 + 2, SPRITES_KEY, this.frameAt("dev", 0))
+      .setOrigin(0.5, 0.5)
+      .setScale(2)
+      .setTint(0x000000)
+      .setAlpha(0.35)
+      .setDepth(9);
+
     this.player = this.add.sprite(W / 2, H / 2, SPRITES_KEY, this.frameAt("dev", 0))
-      .setOrigin(0.5, 0.5);
-    this.player.setScale(2); // 16px -> 32px on screen
+      .setOrigin(0.5, 0.5)
+      .setScale(2)
+      .setDepth(10);
+
     this.playerSpeed = 220;
     this.playerVel = { x: 0, y: 0 }; // used for prediction
 
@@ -155,8 +216,6 @@ class DevBotDodger extends Phaser.Scene {
 
   // ---------- SPRITES / ANIMS ----------
 
-  // Row indices in the sheet
-  // dev row, scam bot row, admin bot row, verified bot row
   rowIndex(type) {
     if (type === "dev") return 0;
     if (type === "scam") return 1;
@@ -165,7 +224,6 @@ class DevBotDodger extends Phaser.Scene {
     return 1;
   }
 
-  // column 0..5 (idle0 idle1 move0..move3)
   frameAt(type, col) {
     const row = this.rowIndex(type);
     return row * 6 + col;
@@ -182,19 +240,15 @@ class DevBotDodger extends Phaser.Scene {
       });
     };
 
-    // Dev
     mk("dev-idle", [this.frameAt("dev", 0), this.frameAt("dev", 1)], 3, -1);
     mk("dev-move", [this.frameAt("dev", 2), this.frameAt("dev", 3), this.frameAt("dev", 4), this.frameAt("dev", 5)], 8, -1);
 
-    // Scam bot
     mk("scam-idle", [this.frameAt("scam", 0), this.frameAt("scam", 1)], 3, -1);
     mk("scam-move", [this.frameAt("scam", 2), this.frameAt("scam", 3), this.frameAt("scam", 4), this.frameAt("scam", 5)], 8, -1);
 
-    // Admin bot
     mk("admin-idle", [this.frameAt("admin", 0), this.frameAt("admin", 1)], 3, -1);
     mk("admin-move", [this.frameAt("admin", 2), this.frameAt("admin", 3), this.frameAt("admin", 4), this.frameAt("admin", 5)], 8, -1);
 
-    // Verified bot
     mk("verified-idle", [this.frameAt("verified", 0), this.frameAt("verified", 1)], 3, -1);
     mk("verified-move", [this.frameAt("verified", 2), this.frameAt("verified", 3), this.frameAt("verified", 4), this.frameAt("verified", 5)], 8, -1);
   }
@@ -248,7 +302,6 @@ class DevBotDodger extends Phaser.Scene {
     const closeBtn = this.makeButton(W / 2, H / 2 + 130, 220, 40, "BACK", () => this.toggleHowTo());
 
     howPanel.add([howBox, howTitle, howText, closeBtn]);
-
     ui.add([panel, title, subtitle, playBtn, howBtn, howPanel]);
 
     ui._howPanel = howPanel;
@@ -345,7 +398,10 @@ class DevBotDodger extends Phaser.Scene {
 
     this.clearBots();
     this.player.setPosition(W / 2, H / 2);
+    this.playerShadow.setPosition(W / 2 + 2, H / 2 + 2);
     this.player.setAlpha(1);
+    this.playerShadow.setAlpha(0.35);
+
     this.player.play("dev-idle", true);
     this.player.setTint(0xffffff);
 
@@ -361,7 +417,10 @@ class DevBotDodger extends Phaser.Scene {
 
     this.clearBots();
     this.player.setPosition(W / 2, H / 2);
+    this.playerShadow.setPosition(W / 2 + 2, H / 2 + 2);
     this.player.setAlpha(1);
+    this.playerShadow.setAlpha(0.35);
+
     this.player.play("dev-idle", true);
     this.player.setTint(0xffffff);
 
@@ -448,7 +507,6 @@ class DevBotDodger extends Phaser.Scene {
   // ---------- ENEMIES ----------
 
   randomBotType() {
-    // Equal chance across the 3 styles
     const r = Math.random();
     if (r < 1 / 3) return "scam";
     if (r < 2 / 3) return "admin";
@@ -468,13 +526,23 @@ class DevBotDodger extends Phaser.Scene {
 
     const botType = this.randomBotType();
 
+    // Shadow
+    const shadow = this.add.sprite(x + 2, y + 2, SPRITES_KEY, this.frameAt(botType, 0))
+      .setOrigin(0.5, 0.5)
+      .setScale(2)
+      .setTint(0x000000)
+      .setAlpha(0.30)
+      .setDepth(9);
+
+    // Bot
     const bot = this.add.sprite(x, y, SPRITES_KEY, this.frameAt(botType, 0))
-      .setOrigin(0.5, 0.5);
-    bot.setScale(2);
+      .setOrigin(0.5, 0.5)
+      .setScale(2)
+      .setDepth(10);
+
     bot.play(`${botType}-idle`, true);
 
     const hasBubble = Math.random() < BUBBLE_CHANCE;
-
     let bubble = null;
     let bobTween = null;
 
@@ -488,6 +556,7 @@ class DevBotDodger extends Phaser.Scene {
       }).setOrigin(0.5);
 
       bubble.setStroke("#0b0f14", 4);
+      bubble.setDepth(50);
 
       const startVisible = Math.random() < 0.5;
       bubble.setAlpha(startVisible ? 1 : 0);
@@ -503,7 +572,6 @@ class DevBotDodger extends Phaser.Scene {
       });
     }
 
-    // Bot personality for steering (prevents clumping)
     const personality = {
       sepWeight: Phaser.Math.FloatBetween(0.9, 1.6),
       chaseWeight: Phaser.Math.FloatBetween(0.7, 1.2),
@@ -514,6 +582,7 @@ class DevBotDodger extends Phaser.Scene {
 
     this.bots.push({
       bot,
+      shadow,
       botType,
       bubble,
       bobTween,
@@ -521,8 +590,6 @@ class DevBotDodger extends Phaser.Scene {
       hasBubble,
       bubbleNextAt: hasBubble ? (this.time.now + Phaser.Math.Between(300, 1200)) : 0,
       personality,
-      lastX: x,
-      lastY: y,
     });
   }
 
@@ -530,6 +597,7 @@ class DevBotDodger extends Phaser.Scene {
     for (const b of this.bots) {
       if (b.bobTween) b.bobTween.stop();
       if (b.bot) b.bot.destroy();
+      if (b.shadow) b.shadow.destroy();
       if (b.bubble) b.bubble.destroy();
     }
     this.bots = [];
@@ -538,10 +606,20 @@ class DevBotDodger extends Phaser.Scene {
   // ---------- GAME LOOP ----------
 
   update(time, delta) {
-    if (this.bg) {
-      const s = delta / 16.67; // normalize to ~60fps
-      this.bg.tilePositionX += 0.15 * s;
-      this.bg.tilePositionY += 0.08 * s;
+    // Background scroll always (menu/play/gameover)
+    const dtBg = delta / 1000;
+
+    // slower = cleaner
+    this.bgFar.tilePositionX += 6 * dtBg;
+    this.bgFar.tilePositionY += 3 * dtBg;
+
+    this.bgNear.tilePositionX += 12 * dtBg;
+    this.bgNear.tilePositionY += 6 * dtBg;
+
+    // tiny pulse in glow
+    if (this.centerGlow) {
+      const pulse = 0.045 + 0.01 * Math.sin(time / 1400);
+      this.centerGlow.setAlpha(pulse);
     }
 
     if (this.state !== "PLAY") return;
@@ -596,27 +674,28 @@ class DevBotDodger extends Phaser.Scene {
 
     this.player.setPosition(nextX, nextY);
 
+    // Player shadow follows (and matches frame/flip)
+    this.playerShadow.setPosition(nextX + 2, nextY + 2);
+    this.playerShadow.setFlipX(this.player.flipX);
+    this.playerShadow.setFrame(this.player.frame.name);
+
     // Bots steer + collision
     const sepRadius = 42;
 
     for (const b of this.bots) {
-      // Predict target a bit ahead
       const pr = b.personality?.predict ?? 0;
       const targetX = this.player.x + this.playerVel.x * pr;
       const targetY = this.player.y + this.playerVel.y * pr;
 
-      // Chase direction
       let vx = targetX - b.bot.x;
       let vy = targetY - b.bot.y;
       [vx, vy] = normalize(vx, vy);
 
-      // Strafe
       let sx = -vy;
       let sy = vx;
       const sdir = b.personality?.strafeDir ?? 1;
       sx *= sdir; sy *= sdir;
 
-      // Separation
       let ax = 0, ay = 0;
       for (const o of this.bots) {
         if (o === b) continue;
@@ -645,13 +724,18 @@ class DevBotDodger extends Phaser.Scene {
       b.bot.x += mx * b.speed * dt;
       b.bot.y += my * b.speed * dt;
 
-      // Bot animation switching
+      // Bot flip + anim
       const bdx = b.bot.x - prevX;
       if (Math.abs(bdx) > 0.02) b.bot.setFlipX(bdx < 0);
 
       const botMoving = (Math.abs(b.bot.x - prevX) + Math.abs(b.bot.y - prevY)) > 0.02;
       if (botMoving) b.bot.play(`${b.botType}-move`, true);
       else b.bot.play(`${b.botType}-idle`, true);
+
+      // Shadow follows (and matches frame/flip)
+      b.shadow.setPosition(b.bot.x + 2, b.bot.y + 2);
+      b.shadow.setFlipX(b.bot.flipX);
+      b.shadow.setFrame(b.bot.frame.name);
 
       // Bubble follow + sporadic show/hide
       if (b.hasBubble && b.bubble) {
@@ -692,7 +776,6 @@ class DevBotDodger extends Phaser.Scene {
         }
       }
 
-      // Collision (still simple AABB-ish)
       const hit = Math.abs(this.player.x - b.bot.x) < 16 && Math.abs(this.player.y - b.bot.y) < 16;
       if (hit) {
         this.gameOver();
@@ -705,7 +788,6 @@ class DevBotDodger extends Phaser.Scene {
     if (this.state === "GAMEOVER") return;
     this.state = "GAMEOVER";
 
-    // Tint player orange
     this.player.setTint(0xf97316);
     this.player.play("dev-idle", true);
 
@@ -715,10 +797,9 @@ class DevBotDodger extends Phaser.Scene {
 
     this.gameOverUI.setVisible(true);
 
-    // Fade bots/bubbles behind overlay
     for (const b of this.bots) {
       this.tweens.add({
-        targets: [b.bot, b.bubble].filter(Boolean),
+        targets: [b.bot, b.shadow, b.bubble].filter(Boolean),
         alpha: 0.25,
         duration: 180,
         ease: "Sine.Out",
