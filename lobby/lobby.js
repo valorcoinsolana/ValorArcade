@@ -10,6 +10,14 @@ const GAMES = [
     path: "lobby/games/dev-bot-dodger/",
     status: "live", // live | coming_soon
   },
+  {
+    id: "devs-dungeon",
+    title: "Devs dungeon",
+    desc: "Delve into the Dungeon!.",
+    tags: ["Arcade Survival", "Skill-based", "Token-gated play"],
+    path: "lobby/games/devs-dungeon/",
+    status: "live", // live | coming_soon
+  },
 ];
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
