@@ -56,9 +56,14 @@
   const joystick = { active:false, dx:0, dy:0, baseX:0, baseY:0, radius:0, knobR:0 };
   let buttons = [];
 
-  // ✅ Mobile safe area reserved for on-canvas controls (joystick + buttons)
-  let MOBILE_UI_H = 0;
-  let MOBILE_CAMERA_Y_OFFSET = 0;
+  // ✅ Mobile safe areas
+  let MOBILE_UI_H = 0;             // reserved bottom for on-canvas controls
+  let MOBILE_TOP_UI_H = 0;         // reserved top for HTML text box
+  let MOBILE_CAMERA_Y_OFFSET = 0;  // small camera nudge
+
+  // ✅ Compressed mobile controls
+  let mobileMenuOpen = false;
+  let hotbarRects = []; // [{slot,x,y,w,h}]
 
   let audioCtx = null;
 
@@ -226,11 +231,11 @@
   // Part X3 - Animation timing
   // ======================
   const ANIM = {
-    tilesMs: 260,   // floor/walls/stairs shimmer
-    itemsMs: 180,   // items pulse
-    npcMs:   230,   // npc idle
-    mobMs:   150,   // enemies
-    plyMs:   140,   // player
+    tilesMs: 260,
+    itemsMs: 180,
+    npcMs:   230,
+    mobMs:   150,
+    plyMs:   140,
   };
 
   function animIndexFor(nowMs, frameCount, msPerFrame, phase = 0) {
@@ -257,7 +262,6 @@
     return true;
   }
 
-  // Sprite lookups return the frame array
   function tileFrames(ch) {
     if (ch === "#") return GFX.frames.wall;
     if (ch === ".") return GFX.frames.floor;
@@ -288,18 +292,39 @@
   }
 
   // ======================
-  // Part 3 - Resize + Mobile layout
+  // Part 3 - Resize + Mobile layout (COMPRESSED CONTROLS)
   // ======================
   function updateButtons() {
-    // ✅ Move button stack INTO the reserved bottom zone on mobile
-    const sp = 70;
-    const bottomTop = isMobile ? (H - MOBILE_UI_H) : 0;
+    // Right-side cluster: MENU, TALK, WAIT (small)
+    const rightX = W - 70;
+    const bottomY = H - 70;
+    const gap = 72;
 
-    buttons.forEach((b, i) => {
-      b.cx = W - 86;
-      const base = isMobile ? (bottomTop + MOBILE_UI_H - 90) : (H - 90);
-      b.cy = base - i * sp;
-    });
+    // buttons[0]=WAIT, buttons[1]=TALK, buttons[2]=MENU
+    if (buttons[0]) { buttons[0].cx = rightX; buttons[0].cy = bottomY; }
+    if (buttons[1]) { buttons[1].cx = rightX; buttons[1].cy = bottomY - gap; }
+    if (buttons[2]) { buttons[2].cx = rightX; buttons[2].cy = bottomY - gap * 2; }
+
+    // Horizontal hotbar row centered
+    hotbarRects = [];
+    const slots = 5;
+    const pad = 10;
+    const size = 56;
+    const totalW = slots * size + (slots - 1) * pad;
+    const startX = (W - totalW) / 2;
+
+    // Keep above joystick + bottom edge
+    const y = H - Math.max(140, MOBILE_UI_H - 40);
+
+    for (let i = 0; i < slots; i++) {
+      hotbarRects.push({
+        slot: i,
+        x: startX + i * (size + pad),
+        y,
+        w: size,
+        h: size
+      });
+    }
   }
 
   function resize() {
@@ -309,33 +334,34 @@
     TS = Math.min((W / 70) | 0, (H / 42) | 0, 30);
     TS = Math.max(TS, 14);
 
-    joystick.radius = Math.min(130, H * 0.15);
+    // Smaller joystick on phones
+    joystick.radius = Math.min(108, H * 0.13);
     joystick.knobR = (joystick.radius * 0.38) | 0;
-    joystick.baseX = joystick.radius * 1.5 + 30;
-    joystick.baseY = H - joystick.radius * 1.5 - 30;
+    joystick.baseX = joystick.radius * 1.4 + 22;
+    joystick.baseY = H - joystick.radius * 1.35 - 22;
 
-    // ✅ Reserve bottom space so controls don't cover the main play area
+    // Reserve space so world doesn't sit under top HTML UI or bottom touch UI
     if (isMobile) {
+      // If you want, you can tune this to match your actual top HUD size.
+      MOBILE_TOP_UI_H = Math.min(H * 0.26, 210);
+
       const joyH = joystick.radius * 2 + 40;
-      const btnH = 520; // fits the vertical button stack
-      MOBILE_UI_H = Math.min(H * 0.55, Math.max(joyH, btnH));
-      MOBILE_CAMERA_Y_OFFSET = (MOBILE_UI_H * 0.45) | 0;
+      const hotbarH = 74; // ~56 + padding
+      const rightBtnH = 230;
+      MOBILE_UI_H = Math.min(H * 0.40, Math.max(joyH, hotbarH + 110, rightBtnH));
+
+      MOBILE_CAMERA_Y_OFFSET = (MOBILE_UI_H * 0.18) | 0;
     } else {
+      MOBILE_TOP_UI_H = 0;
       MOBILE_UI_H = 0;
       MOBILE_CAMERA_Y_OFFSET = 0;
     }
 
+    // Compressed mobile buttons
     buttons = [
-      { id: ".", label: "WAIT", r: 65 },
-      { id: "1", label: "1", r: 50 },
-      { id: "2", label: "2", r: 50 },
-      { id: "3", label: "3", r: 50 },
-      { id: "4", label: "4", r: 50 },
-      { id: "5", label: "5", r: 50 },
-      { id: "t", label: "TALK", r: 65 },
-      { id: "p", label: "SAVE", r: 65 },
-      { id: "l", label: "LOAD", r: 65 },
-      { id: "n", label: "NEW",  r: 65 },
+      { id: ".", label: "WAIT", r: 42 },
+      { id: "t", label: "TALK", r: 42 },
+      { id: "m", label: "MENU", r: 42 },
     ];
 
     updateButtons();
@@ -367,10 +393,33 @@
 
     const t = getTouch(e.changedTouches[0]);
 
-    for (const b of buttons) {
-      if (Math.hypot(t.x - b.cx, t.y - b.cy) <= b.r) { keys[b.id] = true; return; }
+    // Hotbar taps 1–5
+    for (const r of hotbarRects) {
+      if (t.x >= r.x && t.x <= r.x + r.w && t.y >= r.y && t.y <= r.y + r.h) {
+        keys[String(r.slot + 1)] = true;
+        return;
+      }
     }
 
+    // Menu option taps (save/load/new) when menu open
+    if (window.__mobileMenuRects && mobileMenuOpen) {
+      for (const r of window.__mobileMenuRects) {
+        if (t.x >= r.x && t.x <= r.x + r.w && t.y >= r.y && t.y <= r.y + r.h) {
+          keys[r.key] = true;
+          return;
+        }
+      }
+    }
+
+    // Buttons (WAIT/TALK/MENU)
+    for (const b of buttons) {
+      if (Math.hypot(t.x - b.cx, t.y - b.cy) <= b.r) {
+        keys[b.id] = true;
+        return;
+      }
+    }
+
+    // Joystick
     const jd = Math.hypot(t.x - joystick.baseX, t.y - joystick.baseY);
     if (jd <= joystick.radius * 1.7) { joystick.active = true; updateJoy(t.x, t.y); }
   }
@@ -398,7 +447,6 @@
     if (e.repeat) return;
     keys[e.key.toLowerCase()] = true;
   });
-
   addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 
   // ======================
@@ -574,7 +622,6 @@
 
     bsp(1, 1, WIDTH - 2, HEIGHT - 2);
 
-    // Flood-fill connectivity: delete disconnected floor
     const seen = new Set();
     const key = (x, y) => x + "," + y;
     function flood(x, y) {
@@ -589,12 +636,10 @@
       if (map[y][x] === "." && !seen.has(key(x, y))) map[y][x] = "#";
     }
 
-    // Place player
     const start = rooms[0] || { x: 2, y: 2 };
     player.x = start.x;
     player.y = start.y;
 
-    // Pick stairs on a CONNECTED tile: farthest '.' from start using the flood-fill set "seen"
     let best = { x: start.x, y: start.y, d: -1 };
     for (const k of seen) {
       const [xs, ys] = k.split(",");
@@ -604,11 +649,9 @@
       if (d > best.d) best = { x, y, d };
     }
 
-    // Fallback if something weird happens
     const sx = (best.d >= 0) ? best.x : Math.max(2, map[0].length - 3);
     const sy = (best.d >= 0) ? best.y : Math.max(2, map.length - 3);
 
-    // Ensure stairs aren't on the player
     if (sx === player.x && sy === player.y) {
       if (map[sy]?.[sx + 1] === ".") map[sy][sx + 1] = ">";
       else if (map[sy + 1]?.[sx] === ".") map[sy + 1][sx] = ">";
@@ -669,7 +712,7 @@
       const p = randomFloorTile();
       if (!p) break;
       const t = ITEM_TYPES[rand(0, ITEM_TYPES.length - 1)];
-      const animPhase = (p.x * 5 + p.y * 11 + i * 2) | 0; // de-sync pulses
+      const animPhase = (p.x * 5 + p.y * 11 + i * 2) | 0;
       items.push({ ...p, ...t, animPhase });
     }
 
@@ -677,7 +720,7 @@
       const p = randomFloorTile();
       if (!p) break;
       const t = NPC_TYPES[rand(0, NPC_TYPES.length - 1)];
-      const animPhase = (p.x * 3 + p.y * 9 + i * 4) | 0;  // de-sync idles
+      const animPhase = (p.x * 3 + p.y * 9 + i * 4) | 0;
       npcs.push({ ...p, ...t, animPhase });
     }
   }
@@ -918,13 +961,24 @@
 
     let acted = false;
 
+    // Hotbar use (tap 1–5 or keyboard 1–5)
     for (let i = 1; i <= 5; i++) if (keys[String(i)]) { keys[String(i)] = false; useItem(i - 1); acted = true; }
+
     if (keys["t"]) { keys["t"] = false; talkNearest(); acted = true; }
 
-    if (keys["p"]) { keys["p"] = false; saveGame(); }
+    // Mobile menu toggle
+    if (keys["m"]) { keys["m"] = false; mobileMenuOpen = !mobileMenuOpen; }
 
+    // Desktop hotkeys
+    if (keys["p"]) { keys["p"] = false; saveGame(); }
     if (keys["l"]) { keys["l"] = false; if (!loadGame()) log("No save found.", "#aaa"); }
     if (keys["n"]) { keys["n"] = false; newGame(); acted = true; }
+
+    // Mobile menu actions (virtual keys)
+    if (keys["save"]) { keys["save"] = false; saveGame(); }
+    if (keys["load"]) { keys["load"] = false; if (!loadGame()) log("No save found.", "#aaa"); }
+    if (keys["new"])  { keys["new"]  = false; newGame(); acted = true; }
+
     if (keys["."]) { keys["."] = false; log("You wait.", "#aaa"); acted = true; }
 
     const mv = getMoveFromInput();
@@ -972,10 +1026,13 @@
 
     if (!player || !map.length) { requestAnimationFrame(render); return; }
 
-    // ✅ Center camera in the "safe" area (above on-canvas controls) on mobile
-    const safeH = H - MOBILE_UI_H;
+    // Safe world viewport: between top HTML UI and bottom touch UI
+    const topSafe = isMobile ? MOBILE_TOP_UI_H : 0;
+    const bottomSafe = isMobile ? MOBILE_UI_H : 0;
+    const safeH = Math.max(120, H - topSafe - bottomSafe);
+
     const cx = W / 2;
-    const cy = (safeH / 2) - MOBILE_CAMERA_Y_OFFSET;
+    const cy = topSafe + safeH / 2 - MOBILE_CAMERA_Y_OFFSET;
 
     const ox = cx - player.x * TS;
     const oy = cy - player.y * TS;
@@ -983,20 +1040,21 @@
     CTX.fillStyle = "rgba(0,40,0,0.12)";
     CTX.fillRect(0, 0, W, H);
 
-    // ✅ Clip world rendering so it doesn't draw under controls on mobile
-    if (isMobile && MOBILE_UI_H > 0) {
+    // Clip world so it does NOT render under top HTML UI or bottom controls
+    let didClip = false;
+    if (isMobile) {
+      didClip = true;
       CTX.save();
       CTX.beginPath();
-      CTX.rect(0, 0, W, H - MOBILE_UI_H);
+      CTX.rect(0, MOBILE_TOP_UI_H, W, H - MOBILE_TOP_UI_H - MOBILE_UI_H);
       CTX.clip();
     }
 
-    const y0 = clamp(((0 - oy) / TS | 0) - 2, 0, map.length - 1);
-    const y1 = clamp(((safeH - oy) / TS | 0) + 2, 0, map.length - 1);
+    const y0 = clamp(((topSafe - oy) / TS | 0) - 2, 0, map.length - 1);
+    const y1 = clamp((((topSafe + safeH) - oy) / TS | 0) + 2, 0, map.length - 1);
     const x0 = clamp(((0 - ox) / TS | 0) - 2, 0, map[0].length - 1);
     const x1 = clamp(((W - ox) / TS | 0) + 2, 0, map[0].length - 1);
 
-    // fallback font
     CTX.font = `${(TS * 0.9) | 0}px "Courier New", monospace`;
     CTX.textBaseline = "top";
 
@@ -1009,21 +1067,20 @@
       const px = ox + x * TS;
       const py = oy + y * TS;
 
-      // underlay shading
       if (ch === "#") CTX.fillStyle = vis ? "rgba(10,60,20,0.85)" : "rgba(8,20,12,0.60)";
       else CTX.fillStyle = vis ? "rgba(0,15,0,0.7)" : "rgba(0,8,0,0.45)";
       CTX.fillRect(px, py, TS, TS);
 
       if (vis) {
         const frames = tileFrames(ch);
-        const phase = (x * 3 + y * 5) & 7; // de-sync tiles
+        const phase = (x * 3 + y * 5) & 7;
         if (!drawSpriteFrames(frames, px, py, 1, nowMs, ANIM.tilesMs, phase) && ch === ">") {
           drawText(px + 4, py + 2, ">", "#ff9");
         }
       }
     }
 
-    // Items (pulse)
+    // Items
     for (const it of items) {
       if (!explored[it.y]?.[it.x]) continue;
       if (!isVisible(it.x, it.y)) continue;
@@ -1036,7 +1093,7 @@
       }
     }
 
-    // NPCs (idle)
+    // NPCs
     for (const n of npcs) {
       if (!explored[n.y]?.[n.x]) continue;
       if (!isVisible(n.x, n.y)) continue;
@@ -1049,7 +1106,7 @@
       }
     }
 
-    // Enemies (animated)
+    // Enemies
     for (const e of entities) {
       if (e.hp <= 0) continue;
       if (!explored[e.y]?.[e.x]) continue;
@@ -1071,7 +1128,7 @@
       CTX.fillRect(px + 2, py + TS - 6, hpw, 4);
     }
 
-    // Player (animated)
+    // Player
     {
       const px = ox + player.x * TS;
       const py = oy + player.y * TS;
@@ -1086,8 +1143,8 @@
 
     drawMinimap();
 
-    // ✅ End clip BEFORE drawing touch UI so controls render on top
-    if (isMobile && MOBILE_UI_H > 0) CTX.restore();
+    // End clip BEFORE drawing touch UI
+    if (didClip) CTX.restore();
 
     if (isMobile) drawMobileControls();
 
@@ -1110,7 +1167,9 @@
   function drawMinimap() {
     const mw = 170, mh = 120;
     const x0 = W - mw - 16;
-    const y0 = 16;
+
+    // Keep minimap below the top HTML UI on mobile
+    const y0 = (isMobile ? (MOBILE_TOP_UI_H + 12) : 16);
 
     CTX.fillStyle = "rgba(0,20,0,0.65)";
     CTX.fillRect(x0, y0, mw, mh);
@@ -1132,32 +1191,93 @@
   }
 
   function drawMobileControls() {
+    // Joystick
     const bx = joystick.baseX;
     const by = joystick.baseY;
 
-    CTX.fillStyle = "rgba(0,255,120,0.08)";
+    CTX.fillStyle = "rgba(0,255,120,0.07)";
     CTX.beginPath(); CTX.arc(bx, by, joystick.radius, 0, Math.PI*2); CTX.fill();
-    CTX.strokeStyle = "rgba(0,255,120,0.25)";
+    CTX.strokeStyle = "rgba(0,255,120,0.22)";
     CTX.beginPath(); CTX.arc(bx, by, joystick.radius, 0, Math.PI*2); CTX.stroke();
 
     const kx = bx + joystick.dx * (joystick.radius - joystick.knobR);
     const ky = by + joystick.dy * (joystick.radius - joystick.knobR);
-    CTX.fillStyle = "rgba(0,255,160,0.18)";
+    CTX.fillStyle = "rgba(0,255,160,0.16)";
     CTX.beginPath(); CTX.arc(kx, ky, joystick.knobR, 0, Math.PI*2); CTX.fill();
-    CTX.strokeStyle = "rgba(0,255,160,0.35)";
+    CTX.strokeStyle = "rgba(0,255,160,0.30)";
     CTX.beginPath(); CTX.arc(kx, ky, joystick.knobR, 0, Math.PI*2); CTX.stroke();
 
+    // Buttons + hotbar
     CTX.font = `bold 14px "Courier New", monospace`;
     CTX.textAlign = "center";
     CTX.textBaseline = "middle";
 
+    // Right cluster (WAIT/TALK/MENU)
     for (const b of buttons) {
-      CTX.fillStyle = "rgba(0,255,120,0.09)";
+      CTX.fillStyle = "rgba(0,255,120,0.08)";
       CTX.beginPath(); CTX.arc(b.cx, b.cy, b.r, 0, Math.PI*2); CTX.fill();
-      CTX.strokeStyle = "rgba(0,255,120,0.25)";
+      CTX.strokeStyle = "rgba(0,255,120,0.22)";
       CTX.beginPath(); CTX.arc(b.cx, b.cy, b.r, 0, Math.PI*2); CTX.stroke();
-      CTX.fillStyle = "rgba(0,255,160,0.65)";
+      CTX.fillStyle = "rgba(0,255,160,0.75)";
       CTX.fillText(b.label, b.cx, b.cy);
+    }
+
+    // Hotbar row (tap 1–5)
+    for (let i = 0; i < hotbarRects.length; i++) {
+      const r = hotbarRects[i];
+      CTX.fillStyle = "rgba(0,255,120,0.07)";
+      CTX.fillRect(r.x, r.y, r.w, r.h);
+      CTX.strokeStyle = "rgba(0,255,120,0.18)";
+      CTX.strokeRect(r.x, r.y, r.w, r.h);
+
+      CTX.fillStyle = "rgba(0,255,180,0.75)";
+      CTX.fillText(String(i + 1), r.x + r.w / 2, r.y + r.h / 2);
+    }
+
+    // Menu overlay (SAVE/LOAD/NEW)
+    if (mobileMenuOpen) {
+      const w = 260, h = 170;
+      const x = W - w - 18;
+      const y = H - MOBILE_UI_H - h - 14;
+
+      CTX.fillStyle = "rgba(0,0,0,0.72)";
+      CTX.fillRect(x, y, w, h);
+      CTX.strokeStyle = "rgba(0,255,120,0.25)";
+      CTX.strokeRect(x, y, w, h);
+
+      CTX.fillStyle = "rgba(0,255,180,0.85)";
+      CTX.textAlign = "left";
+      CTX.fillText("MENU", x + 14, y + 22);
+
+      const opts = [
+        { k:"save", t:"SAVE" },
+        { k:"load", t:"LOAD" },
+        { k:"new",  t:"NEW"  },
+      ];
+      const rowY0 = y + 44;
+      const rowH = 40;
+
+      window.__mobileMenuRects = opts.map((o, idx) => ({
+        key: o.k,
+        x: x + 14,
+        y: rowY0 + idx * rowH,
+        w: w - 28,
+        h: 32,
+        label: o.t
+      }));
+
+      for (const rr of window.__mobileMenuRects) {
+        CTX.fillStyle = "rgba(0,255,120,0.06)";
+        CTX.fillRect(rr.x, rr.y, rr.w, rr.h);
+        CTX.strokeStyle = "rgba(0,255,120,0.16)";
+        CTX.strokeRect(rr.x, rr.y, rr.w, rr.h);
+        CTX.fillStyle = "rgba(0,255,180,0.8)";
+        CTX.fillText(rr.label, rr.x + 10, rr.y + 16);
+      }
+
+      CTX.textAlign = "center";
+    } else {
+      window.__mobileMenuRects = null;
     }
 
     CTX.textAlign = "left";
@@ -1179,7 +1299,7 @@
   async function init() {
     await loadImages(ASSET);
 
-    // Optional: don’t auto-open debug overlay on mobile (it steals screen space)
+    // don’t auto-open debug overlay on mobile
     if (!isMobile && GFX.missing.length) setArtDebugVisible(true);
 
     if (!loadGame()) newGame();
