@@ -56,6 +56,10 @@
   const joystick = { active:false, dx:0, dy:0, baseX:0, baseY:0, radius:0, knobR:0 };
   let buttons = [];
 
+  // ✅ Mobile safe area reserved for on-canvas controls (joystick + buttons)
+  let MOBILE_UI_H = 0;
+  let MOBILE_CAMERA_Y_OFFSET = 0;
+
   let audioCtx = null;
 
   // ======================
@@ -221,8 +225,6 @@
   // ======================
   // Part X3 - Animation timing
   // ======================
-  // Staggered layers so the whole screen doesn't blink in sync.
-  // Feel free to tweak:
   const ANIM = {
     tilesMs: 260,   // floor/walls/stairs shimmer
     itemsMs: 180,   // items pulse
@@ -289,8 +291,15 @@
   // Part 3 - Resize + Mobile layout
   // ======================
   function updateButtons() {
-    const sy = H - 100, sp = 72;
-    buttons.forEach((b, i) => { b.cx = W - 180; b.cy = sy - i * sp; });
+    // ✅ Move button stack INTO the reserved bottom zone on mobile
+    const sp = 70;
+    const bottomTop = isMobile ? (H - MOBILE_UI_H) : 0;
+
+    buttons.forEach((b, i) => {
+      b.cx = W - 86;
+      const base = isMobile ? (bottomTop + MOBILE_UI_H - 90) : (H - 90);
+      b.cy = base - i * sp;
+    });
   }
 
   function resize() {
@@ -305,6 +314,17 @@
     joystick.baseX = joystick.radius * 1.5 + 30;
     joystick.baseY = H - joystick.radius * 1.5 - 30;
 
+    // ✅ Reserve bottom space so controls don't cover the main play area
+    if (isMobile) {
+      const joyH = joystick.radius * 2 + 40;
+      const btnH = 520; // fits the vertical button stack
+      MOBILE_UI_H = Math.min(H * 0.55, Math.max(joyH, btnH));
+      MOBILE_CAMERA_Y_OFFSET = (MOBILE_UI_H * 0.45) | 0;
+    } else {
+      MOBILE_UI_H = 0;
+      MOBILE_CAMERA_Y_OFFSET = 0;
+    }
+
     buttons = [
       { id: ".", label: "WAIT", r: 65 },
       { id: "1", label: "1", r: 50 },
@@ -313,10 +333,11 @@
       { id: "4", label: "4", r: 50 },
       { id: "5", label: "5", r: 50 },
       { id: "t", label: "TALK", r: 65 },
-      { id: "s", label: "SAVE", r: 65 },
+      { id: "p", label: "SAVE", r: 65 },
       { id: "l", label: "LOAD", r: 65 },
       { id: "n", label: "NEW",  r: 65 },
     ];
+
     updateButtons();
   }
 
@@ -569,35 +590,34 @@
     }
 
     // Place player
-const start = rooms[0] || { x: 2, y: 2 };
-player.x = start.x;
-player.y = start.y;
+    const start = rooms[0] || { x: 2, y: 2 };
+    player.x = start.x;
+    player.y = start.y;
 
-// Pick stairs on a CONNECTED tile: farthest '.' from start using the flood-fill set "seen"
-let best = { x: start.x, y: start.y, d: -1 };
-for (const k of seen) {
-  const [xs, ys] = k.split(",");
-  const x = xs | 0, y = ys | 0;
-  if (map[y][x] !== ".") continue;
-  const d = Math.abs(x - start.x) + Math.abs(y - start.y);
-  if (d > best.d) best = { x, y, d };
-}
+    // Pick stairs on a CONNECTED tile: farthest '.' from start using the flood-fill set "seen"
+    let best = { x: start.x, y: start.y, d: -1 };
+    for (const k of seen) {
+      const [xs, ys] = k.split(",");
+      const x = xs | 0, y = ys | 0;
+      if (map[y][x] !== ".") continue;
+      const d = Math.abs(x - start.x) + Math.abs(y - start.y);
+      if (d > best.d) best = { x, y, d };
+    }
 
-// Fallback if something weird happens
-const sx = (best.d >= 0) ? best.x : Math.max(2, map[0].length - 3);
-const sy = (best.d >= 0) ? best.y : Math.max(2, map.length - 3);
+    // Fallback if something weird happens
+    const sx = (best.d >= 0) ? best.x : Math.max(2, map[0].length - 3);
+    const sy = (best.d >= 0) ? best.y : Math.max(2, map.length - 3);
 
-// Ensure stairs aren't on the player
-if (sx === player.x && sy === player.y) {
-  if (map[sy]?.[sx + 1] === ".") map[sy][sx + 1] = ">";
-  else if (map[sy + 1]?.[sx] === ".") map[sy + 1][sx] = ">";
-  else map[sy][sx] = ">";
-} else {
-  map[sy][sx] = ">";
-}
+    // Ensure stairs aren't on the player
+    if (sx === player.x && sy === player.y) {
+      if (map[sy]?.[sx + 1] === ".") map[sy][sx + 1] = ">";
+      else if (map[sy + 1]?.[sx] === ".") map[sy + 1][sx] = ">";
+      else map[sy][sx] = ">";
+    } else {
+      map[sy][sx] = ">";
+    }
 
-spawnContent();
-
+    spawnContent();
 
     const nm = FLOOR_NAMES[(gameLevel - 1) % FLOOR_NAMES.length];
     log(`Floor ${gameLevel}: ${nm} — gas fees rising…`, "#f96");
@@ -952,14 +972,27 @@ spawnContent();
 
     if (!player || !map.length) { requestAnimationFrame(render); return; }
 
-    const ox = (W / 2) - player.x * TS;
-    const oy = (H / 2) - player.y * TS;
+    // ✅ Center camera in the "safe" area (above on-canvas controls) on mobile
+    const safeH = H - MOBILE_UI_H;
+    const cx = W / 2;
+    const cy = (safeH / 2) - MOBILE_CAMERA_Y_OFFSET;
+
+    const ox = cx - player.x * TS;
+    const oy = cy - player.y * TS;
 
     CTX.fillStyle = "rgba(0,40,0,0.12)";
     CTX.fillRect(0, 0, W, H);
 
+    // ✅ Clip world rendering so it doesn't draw under controls on mobile
+    if (isMobile && MOBILE_UI_H > 0) {
+      CTX.save();
+      CTX.beginPath();
+      CTX.rect(0, 0, W, H - MOBILE_UI_H);
+      CTX.clip();
+    }
+
     const y0 = clamp(((0 - oy) / TS | 0) - 2, 0, map.length - 1);
-    const y1 = clamp(((H - oy) / TS | 0) + 2, 0, map.length - 1);
+    const y1 = clamp(((safeH - oy) / TS | 0) + 2, 0, map.length - 1);
     const x0 = clamp(((0 - ox) / TS | 0) - 2, 0, map[0].length - 1);
     const x1 = clamp(((W - ox) / TS | 0) + 2, 0, map[0].length - 1);
 
@@ -1052,6 +1085,10 @@ spawnContent();
     }
 
     drawMinimap();
+
+    // ✅ End clip BEFORE drawing touch UI so controls render on top
+    if (isMobile && MOBILE_UI_H > 0) CTX.restore();
+
     if (isMobile) drawMobileControls();
 
     if (gameOver || win) {
@@ -1141,7 +1178,10 @@ spawnContent();
 
   async function init() {
     await loadImages(ASSET);
-    if (GFX.missing.length) setArtDebugVisible(true);
+
+    // Optional: don’t auto-open debug overlay on mobile (it steals screen space)
+    if (!isMobile && GFX.missing.length) setArtDebugVisible(true);
+
     if (!loadGame()) newGame();
     revealFog();
     updateUI();
