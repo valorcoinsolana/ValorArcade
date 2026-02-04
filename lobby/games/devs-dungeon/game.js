@@ -568,15 +568,36 @@
       if (map[y][x] === "." && !seen.has(key(x, y))) map[y][x] = "#";
     }
 
-    // Place player & stairs
-    const start = rooms[0] || { x: 2, y: 2 };
-    const end = rooms[rooms.length - 1] || { x: WIDTH - 3, y: HEIGHT - 3 };
+    // Place player
+const start = rooms[0] || { x: 2, y: 2 };
+player.x = start.x;
+player.y = start.y;
 
-    player.x = start.x;
-    player.y = start.y;
-    map[end.y][end.x] = ">";
+// Pick stairs on a CONNECTED tile: farthest '.' from start using the flood-fill set "seen"
+let best = { x: start.x, y: start.y, d: -1 };
+for (const k of seen) {
+  const [xs, ys] = k.split(",");
+  const x = xs | 0, y = ys | 0;
+  if (map[y][x] !== ".") continue;
+  const d = Math.abs(x - start.x) + Math.abs(y - start.y);
+  if (d > best.d) best = { x, y, d };
+}
 
-    spawnContent();
+// Fallback if something weird happens
+const sx = (best.d >= 0) ? best.x : Math.max(2, map[0].length - 3);
+const sy = (best.d >= 0) ? best.y : Math.max(2, map.length - 3);
+
+// Ensure stairs aren't on the player
+if (sx === player.x && sy === player.y) {
+  if (map[sy]?.[sx + 1] === ".") map[sy][sx + 1] = ">";
+  else if (map[sy + 1]?.[sx] === ".") map[sy + 1][sx] = ">";
+  else map[sy][sx] = ">";
+} else {
+  map[sy][sx] = ">";
+}
+
+spawnContent();
+
 
     const nm = FLOOR_NAMES[(gameLevel - 1) % FLOOR_NAMES.length];
     log(`Floor ${gameLevel}: ${nm} — gas fees rising…`, "#f96");
