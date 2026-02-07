@@ -252,12 +252,12 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
   // Part X3 - Animation timing
   // ======================
   const ANIM = {
-    tilesMs: 260,
-    itemsMs: 180,
-    npcMs:   230,
-    mobMs:   150,
-    plyMs:   140,
-  };
+  tilesMs: 420,  // floor/walls/stairs
+  itemsMs: 320,  // potions, gas, etc
+  npcMs:   380,
+  mobMs:   260,  // enemies
+  plyMs:   240,  // player
+};
 
   function animIndexFor(nowMs, frameCount, msPerFrame, phase = 0) {
     if (frameCount <= 1) return 0;
@@ -379,8 +379,8 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
     W = C.width = Math.min(innerWidth, 1440);
     H = C.height = Math.min(innerHeight, 820);
 
-    TS = Math.min((W / 36) | 0, (H / 22) | 0, 64);
-TS = Math.max(TS, 26);
+    TS = Math.min((W / 30) | 0, (H / 18) | 0, 72);
+TS = Math.max(TS, 30);
 
        // Compact D-pad bottom-left
     dpad.size = Math.min(170, Math.max(120, (Math.min(W, H) * 0.30) | 0));
@@ -915,6 +915,7 @@ buttons = [
         gameOver = true;
         log("You got rugged. GAME OVER.", "#f66");
         beep(90, 0.20, 0.18, "square");
+        mobileMenuOpen = isMobile;
       } else {
         target.hp = 0;
         log(`${target.name} rekt.`, "#9f9");
@@ -1686,11 +1687,14 @@ if (invOpen) {
       CTX.textAlign = "left";
       CTX.fillText("MENU", x + 14, y + 22);
 
-      const opts = [
-        { k:"save", t:"SAVE" },
-        { k:"load", t:"LOAD" },
-        { k:"new",  t:"NEW"  },
-      ];
+     const opts = [
+  { k:"save", t:"SAVE" },
+  { k:"load", t:"LOAD" },
+  { k:"new",  t:"NEW"  },
+  { k:"i",    t:"INVENTORY" },
+  { k:"n",    t:"RESTART" },
+];
+
       const rowY0 = y + 44;
       const rowH = 40;
 
