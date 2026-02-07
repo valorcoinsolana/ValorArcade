@@ -1220,12 +1220,24 @@ buttons = [
         drawText(px + 4, py + 2, e.ch, e.color);
       }
 
-      const w = TS - 4;
-      const hpw = Math.max(0, (w * (e.hp / e.maxhp)) | 0);
-      CTX.fillStyle = "rgba(0,0,0,0.6)";
-      CTX.fillRect(px + 2, py + TS - 6, w, 4);
-      CTX.fillStyle = "rgba(255,80,80,0.9)";
-      CTX.fillRect(px + 2, py + TS - 6, hpw, 4);
+        // --- enemy HP bar ABOVE the sprite ---
+  const w = TS - 4;
+  const hpw = Math.max(0, (w * (e.hp / e.maxhp)) | 0);
+
+  const barH = 4;
+  const barX = px + 2;
+
+  // keep bar inside visible world (don’t overlap top UI)
+  const worldTop = isMobile ? MOBILE_TOP_UI_H : 0;
+  let barY = py - (barH + 3);
+  barY = Math.max(worldTop + 2, barY);
+
+  CTX.fillStyle = "rgba(0,0,0,0.6)";
+  CTX.fillRect(barX, barY, w, barH);
+
+  CTX.fillStyle = "rgba(255,80,80,0.9)";
+  CTX.fillRect(barX, barY, hpw, barH);
+
     }
 
     // Player
