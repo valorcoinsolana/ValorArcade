@@ -142,7 +142,11 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
     stairsDown: ["assets/tiles/stairs_down_0.png", "assets/tiles/stairs_down_1.png"],
 
     // Player
-    player: ["assets/tiles/player_0.png", "assets/tiles/player_1.png"],
+    playerU: ["assets/tiles/player_u_0.png", "assets/tiles/player_u_1.png"],
+playerD: ["assets/tiles/player_d_0.png", "assets/tiles/player_d_1.png"],
+playerL: ["assets/tiles/player_l_0.png", "assets/tiles/player_l_1.png"],
+playerR: ["assets/tiles/player_r_0.png", "assets/tiles/player_r_1.png"],
+
 
     // Enemies
     enemyF: ["assets/tiles/enemy_fud_imp_0.png","assets/tiles/enemy_fud_imp_1.png"],
@@ -707,6 +711,10 @@ C.addEventListener("mousedown", (e) => {
     const cl = CLASSES[idx];
     player = {
       x: 0, y: 0,
+      facing: "down",     // "up" | "down" | "left" | "right"
+step: 0,            // 0 or 1 (which walk frame)
+stepAt: 0,          // timestamp of last step toggle
+
       hp: cl.start.hp, maxhp: cl.start.maxhp,
       atk: cl.start.atk, def: cl.start.def,
       vision: cl.start.vision + (idx === 0 ? 1 : 0),
@@ -1168,6 +1176,12 @@ function useInventoryItem(index) {
 
 
   function tryMove(dx, dy) {
+    // set facing based on attempted move
+if (dx === 1) player.facing = "right";
+else if (dx === -1) player.facing = "left";
+else if (dy === 1) player.facing = "down";
+else if (dy === -1) player.facing = "up";
+
     if (gameOver || win) return false;
     const nx = player.x + dx, ny = player.y + dy;
     if (isWall(nx, ny)) { beep(100, 0.04, 0.10, "square"); return false; }
@@ -1188,6 +1202,10 @@ if (n) {
     if (e && e.hp > 0) { attack(player, e); return true; }
 
     player.x = nx; player.y = ny;
+    // walk animation: flip frame on each successful move
+player.step ^= 1;
+player.stepAt = performance.now();
+
 
     const it = getItemAt(nx, ny);
     if (it) pickupItem(it);
@@ -1545,9 +1563,17 @@ if (invOpen) {
       CTX.fillStyle = "rgba(0,255,160,0.12)";
       CTX.fillRect(px - 3, py - 3, TS + 6, TS + 6);
 
-      if (!drawSpriteFrames(GFX.frames.player, px, py, 1, nowMs, ANIM.plyMs, 0)) {
-        drawText(px + 4, py + 2, "@", "#0f8");
-      }
+      const frames = playerFramesForFacing(player.facing);
+
+// draw exact step frame (no time-based anim)
+const im = (frames && frames[player.step]) || firstAvailableFrame(frames);
+
+if (im) {
+  CTX.drawImage(im, 0, 0, SPRITE_SRC, SPRITE_SRC, px, py, TS, TS);
+} else {
+  drawText(px + 4, py + 2, "@", "#0f8");
+}
+
     }
         // ===== UI overlays (minimap + menu + controls) =====
     // world is clipped on mobile; UI should draw OUTSIDE the clip
