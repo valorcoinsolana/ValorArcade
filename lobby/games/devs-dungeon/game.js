@@ -307,45 +307,58 @@ const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   // Part 3 - Resize + Mobile layout (COMPRESSED CONTROLS)
   // ======================
   function updateButtons() {
-  // --- Right-side cluster should be HORIZONTAL (MENU / TALK / WAIT)
-  const baseY = isMobile ? (H - MOBILE_UI_H + 92) : (H - 70); // sits in the bottom UI zone
-  const baseX = W - 70;
-  const gap = 72;
+  const bottomTop = H - MOBILE_UI_H;
 
-  // buttons[0]=WAIT, buttons[1]=TALK, buttons[2]=MENU (keep same ids)
-  if (buttons[2]) { buttons[2].cx = baseX;         buttons[2].cy = baseY; } // MENU
-  if (buttons[1]) { buttons[1].cx = baseX - gap;   buttons[1].cy = baseY; } // TALK
-  if (buttons[0]) { buttons[0].cx = baseX - gap*2; buttons[0].cy = baseY; } // WAIT
+  // ----------------------
+  // 1) Right-side buttons: WAIT / TALK / MENU (horizontal, anchored right)
+  // ----------------------
+  const r = (buttons[0] ? buttons[0].r : 42);
+  const pad = 14;
 
-  // --- Hotbar row (tap 1–5)
+  // place them near the bottom of the reserved UI zone
+  const btnY = H - r - pad;
+  const gap = (r * 2) + 12; // spacing between circle centers
+
+  const menuX = W - r - pad;
+  if (buttons[2]) { buttons[2].cx = menuX;         buttons[2].cy = btnY; } // MENU
+  if (buttons[1]) { buttons[1].cx = menuX - gap;   buttons[1].cy = btnY; } // TALK
+  if (buttons[0]) { buttons[0].cx = menuX - gap*2; buttons[0].cy = btnY; } // WAIT
+
+
+  // ----------------------
+  // 2) Hotbar: shift right to avoid D-pad AND shrink if needed
+  // ----------------------
   hotbarRects = [];
   const slots = 5;
-  const pad = 10;
-  const size = 56;
-  const totalW = slots * size + (slots - 1) * pad;
+  const hotPad = 10;
 
-  // Place hotbar near top of the bottom reserved zone
-  const bottomTop = H - MOBILE_UI_H;
-  const y = bottomTop + 14;
+  // D-pad right edge + padding = "do not start before this"
+  const dpadRightEdge = dpad.cx + dpad.size * 0.5;
+  const minX = isMobile ? (dpadRightEdge + 22) : 14;
+  const maxX = W - 14;
 
-  // Centered by default...
-  let startX = (W - totalW) / 2;
+  // available width for hotbar after avoiding D-pad
+  const availW = Math.max(120, maxX - minX);
+  let size = Math.floor((availW - (slots - 1) * hotPad) / slots);
 
-  // ...but on mobile, avoid overlapping the D-pad footprint
-  if (isMobile) {
-    const dpadRightEdge = dpad.cx + dpad.size * 0.5;
-    const avoidX = dpadRightEdge + 18;            // padding past D-pad
-    startX = Math.max(startX, avoidX);
+  // clamp so it doesn't get tiny or huge
+  size = clamp(size, 40, 56);
 
-    // keep it on-screen
-    startX = Math.min(startX, W - totalW - 14);
-    startX = Math.max(startX, 14);
-  }
+  const totalW = slots * size + (slots - 1) * hotPad;
+
+  // hotbar sits near the TOP of the bottom UI zone
+  const y = bottomTop + 12;
+
+  // startX tries to center within available space, but never enters D-pad area
+  let startX = minX + Math.max(0, (availW - totalW) / 2);
+
+  // final clamp to screen
+  startX = clamp(startX, 14, W - totalW - 14);
 
   for (let i = 0; i < slots; i++) {
     hotbarRects.push({
       slot: i,
-      x: startX + i * (size + pad),
+      x: startX + i * (size + hotPad),
       y,
       w: size,
       h: size
