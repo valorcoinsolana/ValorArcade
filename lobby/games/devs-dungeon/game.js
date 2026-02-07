@@ -353,33 +353,6 @@ const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   }
 }
 
-
-  // --- Right-side button cluster (stacked ABOVE hotbar) ---
-  if (!buttons.length) return;
-
-  const r = buttons[0].r;
-  const gap = r * 2 + 12; // MUST be >= diameter to prevent overlap
-
-  const cx = W - safePad - r;
-
-  // put WAIT just above the hotbar, then TALK, then MENU above that
-  const waitCy = hotbarY - (r + 10);
-
-  // buttons[0]=WAIT, buttons[1]=TALK, buttons[2]=MENU
-  buttons[0].cx = cx; buttons[0].cy = waitCy;
-  buttons[1].cx = cx; buttons[1].cy = waitCy - gap;
-  buttons[2].cx = cx; buttons[2].cy = waitCy - gap * 2;
-
-  // keep the top-most button inside the bottom safe zone
-  const bottomTop = H - MOBILE_UI_H;
-  const minTop = bottomTop + r + 8;
-  const shiftDown = Math.max(0, minTop - buttons[2].cy);
-  if (shiftDown > 0) {
-    for (const b of buttons) b.cy += shiftDown;
-  }
-}
-
-
   function resize() {
     W = C.width = Math.min(innerWidth, 1440);
     H = C.height = Math.min(innerHeight, 820);
