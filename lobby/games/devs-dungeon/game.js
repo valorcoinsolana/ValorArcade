@@ -48,6 +48,8 @@ const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   let items = [];
   let npcs = [];
   let gameOver = false, win = false;
+  let deathMenuShown = false;
+
 
   let meta = { wins: 0, highFloor: 0 };
   let player = null;
@@ -678,6 +680,7 @@ C.addEventListener("mousedown", (e) => {
   function newGame() {
     try { localStorage.removeItem(SAVE_KEY); } catch {}
     gameLevel = 1;
+    deathMenuShown = false;
     meta.wins = meta.wins || 0;
     meta.highFloor = Math.max(meta.highFloor || 0, gameLevel - 1);
 
@@ -1304,11 +1307,13 @@ if (invOpen) {
 
   // allow restart via key OR menu item
   if (keys["n"] || keys["new"]) {
-    keys["n"] = false;
-    keys["new"] = false;
-    newGame();
-    return;
-  }
+  keys["n"] = false;
+  keys["new"] = false;
+  mobileMenuOpen = false;   // ✅ close menu immediately
+  newGame();
+  return;
+}
+
 
   // allow arcade return via menu item
   if (keys["arcade"]) {
@@ -1581,8 +1586,12 @@ if (gameOver || win) {
   CTX.font = `16px "Courier New", monospace`;
   CTX.fillText("Tap MENU to restart / save / arcade", x + w/2, y + 60);
 
-  // force menu visible on mobile so player sees options immediately
-  if (isMobile) mobileMenuOpen = true;
+  // force menu visible on mobile ONCE so player sees options immediately
+if (isMobile && !deathMenuShown) {
+  mobileMenuOpen = true;
+  deathMenuShown = true;
+}
+
 
   CTX.textAlign = "left";
   CTX.textBaseline = "top";
