@@ -78,6 +78,8 @@ const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   let hotbarRects = []; // [{slot,x,y,w,h}]
   let invOpen = false;
 let invScroll = 0;
+  // which inventory row is selected (0-based within the FULL inv array)
+let invIndex = 0;
 
 
   let audioCtx = null;
@@ -989,15 +991,47 @@ function useHotbarItem(slotIndex) {
 // ======================
 // Inventory usage
 // ======================
-function useInventoryItem(invIndex) {
-  const i = invIndex | 0;
-  if (i < 0 || i >= player.inv.length) return;
-
+function useInventoryItem(index) {
+  const i = index | 0;
   const it = player.inv[i];
-  if (applyItem(it)) {
-    player.inv.splice(i, 1);
+  if (!it) { log("No item selected.", "#aaa"); return; }
+
+  if (it.kind === "heal") {
+    const before = player.hp;
+    player.hp = Math.min(player.maxhp, player.hp + it.amount);
+    log(`Healed ${player.hp - before}.`, "#9f9");
+    beep(640, 0.06, 0.10, "triangle");
+
+  } else if (it.kind === "gas") {
+    player.gas += it.amount;
+    log(`+${it.amount} Gas.`, "#0ff");
+    beep(880, 0.05, 0.10);
+
+  } else if (it.kind === "xp") {
+    gainXP(it.amount);
+
+  } else if (it.kind === "atk") {
+    player.atk += it.amount;
+    log(`ATK +${it.amount}.`, "#f6f");
+    beep(520, 0.05, 0.10, "triangle");
+
+  } else if (it.kind === "def") {
+    player.def += it.amount;
+    log(`DEF +${it.amount}.`, "#6ff");
+    beep(520, 0.05, 0.10, "triangle");
+
+  } else {
+    log("Can't use that item.", "#f96");
+    return;
   }
+
+  // remove used item
+  player.inv.splice(i, 1);
+
+  // keep cursor valid
+  invIndex = clamp(invIndex, 0, Math.max(0, player.inv.length - 1));
 }
+
 
   function talkNearest() {
     let best = null;
@@ -1112,19 +1146,26 @@ function useInventoryItem(invIndex) {
     }
   }
 
-  // Inventory scrolling (when open)
-  if (invOpen) {
-    if (keys["arrowup"] || keys["k"]) {
-      keys["arrowup"] = false;
-      keys["k"] = false;
-      invScroll--;
-    }
-    if (keys["arrowdown"] || keys["j"]) {
-      keys["arrowdown"] = false;
-      keys["j"] = false;
-      invScroll++;
-    }
+ // Inventory navigation (when open)
+if (invOpen) {
+  const total = player.inv.length;
+
+  if (keys["arrowup"] || keys["k"]) {
+    keys["arrowup"] = false; keys["k"] = false;
+    invIndex--;
   }
+  if (keys["arrowdown"] || keys["j"]) {
+    keys["arrowdown"] = false; keys["j"] = false;
+    invIndex++;
+  }
+
+  invIndex = clamp(invIndex, 0, Math.max(0, total - 1));
+
+  // optional: keep scroll roughly following selection
+  const page = 8; // how many lines you draw
+  invScroll = clamp(invIndex - 1, 0, Math.max(0, total - page));
+}
+
 
   const now = performance.now();
   if (now - lastActionAt < 95) return;
@@ -1140,16 +1181,18 @@ function useInventoryItem(invIndex) {
   if (keys["m"]) { keys["m"] = false; mobileMenuOpen = !mobileMenuOpen; }
   if (keys["i"]) { keys["i"] = false; invOpen = !invOpen; }
 
-  // If inventory is open: allow using selected item (Enter / Space), then block gameplay
   if (invOpen) {
-    if (keys["enter"] || keys[" "]) {
-      keys["enter"] = false;
-      keys[" "] = false;
-      useInventoryItem(invIndex);
-    }
-    updateUI();
-    return;
+  // Use item: Enter or Space (desktop)
+  if (keys["enter"] || keys[" "]) {
+    keys["enter"] = false;
+    keys[" "] = false;
+    useInventoryItem(invIndex);
   }
+
+  updateUI();
+  return;
+}
+
 
   // Hotbar use (tap 1–5 or keyboard 1–5)
   for (let i = 1; i <= 5; i++) {
