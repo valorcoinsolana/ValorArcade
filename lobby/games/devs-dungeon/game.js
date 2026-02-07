@@ -1559,6 +1559,35 @@ if (invOpen) {
 
     // Mobile controls (dpad/hotbar/buttons/menu overlay)
     if (isMobile) drawMobileControls();
+    // Game over / win overlay (mobile-friendly)
+if (gameOver || win) {
+  const w = Math.min(520, W - 40);
+  const h = 170;
+  const x = (W - w) / 2;
+  const y = (isMobile ? MOBILE_TOP_UI_H + 18 : 80);
+
+  CTX.fillStyle = "rgba(0,0,0,0.72)";
+  CTX.fillRect(x, y, w, h);
+  CTX.strokeStyle = "rgba(0,255,120,0.25)";
+  CTX.strokeRect(x, y, w, h);
+
+  CTX.textAlign = "center";
+  CTX.textBaseline = "top";
+  CTX.fillStyle = "rgba(0,255,180,0.9)";
+  CTX.font = `bold 22px "Courier New", monospace`;
+  CTX.fillText(win ? "YOU WIN" : "GAME OVER", x + w/2, y + 16);
+
+  CTX.fillStyle = "rgba(200,200,200,0.85)";
+  CTX.font = `16px "Courier New", monospace`;
+  CTX.fillText("Tap MENU to restart / save / arcade", x + w/2, y + 60);
+
+  // force menu visible on mobile so player sees options immediately
+  if (isMobile) mobileMenuOpen = true;
+
+  CTX.textAlign = "left";
+  CTX.textBaseline = "top";
+}
+
 
     requestAnimationFrame(render);
   }
@@ -1843,23 +1872,27 @@ function drawDesktopMenuUI() {
   CTX.textAlign = "center";
   CTX.textBaseline = "middle";
 
-  // D-pad
-  if (!dpadRects) return;
+   // D-pad (optional)
+  const hasDpad = !!dpadRects;
 
 
-    const drawBtn = (r, label) => {
-      CTX.fillStyle = "rgba(0,255,120,0.07)";
-      CTX.fillRect(r.x, r.y, r.w, r.h);
-      CTX.strokeStyle = "rgba(0,255,120,0.22)";
-      CTX.strokeRect(r.x, r.y, r.w, r.h);
-      CTX.fillStyle = "rgba(0,255,180,0.80)";
-      CTX.fillText(label, r.x + r.w/2, r.y + r.h/2);
-    };
+    // ---- D-pad (only if available) ----
+if (hasDpad) {
+  const drawBtn = (r, label) => {
+    CTX.fillStyle = "rgba(0,255,120,0.07)";
+    CTX.fillRect(r.x, r.y, r.w, r.h);
+    CTX.strokeStyle = "rgba(0,255,120,0.22)";
+    CTX.strokeRect(r.x, r.y, r.w, r.h);
+    CTX.fillStyle = "rgba(0,255,180,0.80)";
+    CTX.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
+  };
 
-    drawBtn(dpadRects.up, "▲");
-    drawBtn(dpadRects.down, "▼");
-    drawBtn(dpadRects.left, "◀");
-    drawBtn(dpadRects.right, "▶");
+  drawBtn(dpadRects.up, "▲");
+  drawBtn(dpadRects.down, "▼");
+  drawBtn(dpadRects.left, "◀");
+  drawBtn(dpadRects.right, "▶");
+}
+
 
 
     // Buttons + hotbar
@@ -1890,56 +1923,57 @@ function drawDesktopMenuUI() {
     }
 
     // Menu overlay (SAVE/LOAD/NEW)
-    if (mobileMenuOpen) {
-      const w = 260;
-const h = 44 + opts.length * 40 + 12;
+    // Menu overlay (SAVE/LOAD/NEW/INVENTORY/ARCADE)
+if (mobileMenuOpen) {
+  const opts = [
+    { k:"save",   t:"SAVE" },
+    { k:"load",   t:"LOAD" },
+    { k:"new",    t:"NEW"  },
+    { k:"i",      t:"INVENTORY" },
+    { k:"arcade", t:"ARCADE" },
+  ];
 
-      const x = W - w - 18;
-      const y = H - MOBILE_UI_H - h - 14;
+  const w = 260;
+  const h = 44 + opts.length * 40 + 12;
 
-      CTX.fillStyle = "rgba(0,0,0,0.72)";
-      CTX.fillRect(x, y, w, h);
-      CTX.strokeStyle = "rgba(0,255,120,0.25)";
-      CTX.strokeRect(x, y, w, h);
+  const x = W - w - 18;
+  const y = H - MOBILE_UI_H - h - 14;
 
-      CTX.fillStyle = "rgba(0,255,180,0.85)";
-      CTX.textAlign = "left";
-      CTX.fillText("MENU", x + 14, y + 22);
+  CTX.fillStyle = "rgba(0,0,0,0.72)";
+  CTX.fillRect(x, y, w, h);
+  CTX.strokeStyle = "rgba(0,255,120,0.25)";
+  CTX.strokeRect(x, y, w, h);
 
-     const opts = [
-  { k:"save",   t:"SAVE" },
-  { k:"load",   t:"LOAD" },
-  { k:"new",    t:"NEW"  },
-  { k:"i",      t:"INVENTORY" },
-  { k:"arcade", t:"ARCADE" },
-];
+  CTX.fillStyle = "rgba(0,255,180,0.85)";
+  CTX.textAlign = "left";
+  CTX.fillText("MENU", x + 14, y + 22);
 
+  const rowY0 = y + 44;
+  const rowH = 40;
 
-      const rowY0 = y + 44;
-      const rowH = 40;
+  window.__mobileMenuRects = opts.map((o, idx) => ({
+    key: o.k,
+    x: x + 14,
+    y: rowY0 + idx * rowH,
+    w: w - 28,
+    h: 32,
+    label: o.t
+  }));
 
-      window.__mobileMenuRects = opts.map((o, idx) => ({
-        key: o.k,
-        x: x + 14,
-        y: rowY0 + idx * rowH,
-        w: w - 28,
-        h: 32,
-        label: o.t
-      }));
+  for (const rr of window.__mobileMenuRects) {
+    CTX.fillStyle = "rgba(0,255,120,0.06)";
+    CTX.fillRect(rr.x, rr.y, rr.w, rr.h);
+    CTX.strokeStyle = "rgba(0,255,120,0.16)";
+    CTX.strokeRect(rr.x, rr.y, rr.w, rr.h);
+    CTX.fillStyle = "rgba(0,255,180,0.8)";
+    CTX.fillText(rr.label, rr.x + 10, rr.y + 16);
+  }
 
-      for (const rr of window.__mobileMenuRects) {
-        CTX.fillStyle = "rgba(0,255,120,0.06)";
-        CTX.fillRect(rr.x, rr.y, rr.w, rr.h);
-        CTX.strokeStyle = "rgba(0,255,120,0.16)";
-        CTX.strokeRect(rr.x, rr.y, rr.w, rr.h);
-        CTX.fillStyle = "rgba(0,255,180,0.8)";
-        CTX.fillText(rr.label, rr.x + 10, rr.y + 16);
-      }
+  CTX.textAlign = "center";
+} else {
+  window.__mobileMenuRects = null;
+}
 
-      CTX.textAlign = "center";
-    } else {
-      window.__mobileMenuRects = null;
-    }
 
     CTX.textAlign = "left";
     CTX.textBaseline = "top";
