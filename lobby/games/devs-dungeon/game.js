@@ -899,42 +899,105 @@ buttons = [
     return raw;
   }
 
-  function pickupItem(it) {
-    if (!it) return;
-    if (player.inv.length >= 15) { log("Inventory full (15).", "#f96"); return; }
-    let placed = false;
-    if (it.hotbar) for (let i = 0; i < 5; i++) if (!player.hotbar[i]) {
-      player.hotbar[i] = { name: it.name, kind: it.kind, amount: it.amount, ch: it.ch };
-      placed = true; break;
-    }
-    if (!placed) player.inv.push({ name: it.name, kind: it.kind, amount: it.amount, ch: it.ch });
-    log(`Picked up: ${it.name}`, "#0ff"); beep(880, 0.05, 0.10);
-    items = items.filter(x => x !== it);
+ function pickupItem(it) {
+  if (!it) return;
+  if (player.inv.length >= 15) {
+    log("Inventory full (15).", "#f96");
+    return;
   }
 
-  function useItem(slotIndex) {
-    const idx = slotIndex | 0;
-    if (idx < 0 || idx > 4) return;
-    const it = player.hotbar[idx];
-    if (!it) { log(`Hotbar ${idx+1} is empty.`, "#aaa"); return; }
+  let placed = false;
 
-    if (it.kind === "heal") {
-      const before = player.hp;
-      player.hp = Math.min(player.maxhp, player.hp + it.amount);
-      log(`Healed ${player.hp - before}.`, "#9f9");
-      beep(640, 0.06, 0.10, "triangle");
-    } else if (it.kind === "gas") {
-      player.gas += it.amount;
-      log(`+${it.amount} Gas.`, "#0ff");
-      beep(880, 0.05, 0.10);
-    } else if (it.kind === "xp") {
-      gainXP(it.amount);
-    } else {
-      log("That item is not usable from hotbar.", "#f96");
+  // auto-place usable items into hotbar
+  if (it.hotbar) {
+    for (let i = 0; i < 5; i++) {
+      if (!player.hotbar[i]) {
+        player.hotbar[i] = {
+          name: it.name,
+          kind: it.kind,
+          amount: it.amount,
+          ch: it.ch
+        };
+        placed = true;
+        break;
+      }
     }
-
-    player.hotbar[idx] = null;
   }
+
+  if (!placed) {
+    player.inv.push({
+      name: it.name,
+      kind: it.kind,
+      amount: it.amount,
+      ch: it.ch
+    });
+  }
+
+  log(`Picked up: ${it.name}`, "#0ff");
+  beep(880, 0.05, 0.10);
+  items = items.filter(x => x !== it);
+}
+
+// ======================
+// Item usage (shared)
+// ======================
+function applyItem(it) {
+  if (!it) return false;
+
+  if (it.kind === "heal") {
+    const before = player.hp;
+    player.hp = Math.min(player.maxhp, player.hp + it.amount);
+    log(`Healed ${player.hp - before}.`, "#9f9");
+    beep(640, 0.06, 0.10, "triangle");
+    return true;
+  }
+
+  if (it.kind === "gas") {
+    player.gas += it.amount;
+    log(`+${it.amount} Gas.`, "#0ff");
+    beep(880, 0.05, 0.10);
+    return true;
+  }
+
+  if (it.kind === "xp") {
+    gainXP(it.amount);
+    return true;
+  }
+
+  log("That item can't be used.", "#f96");
+  return false;
+}
+
+// ======================
+// Hotbar usage (1–5)
+// ======================
+function useHotbarItem(slotIndex) {
+  const i = slotIndex | 0;
+  if (i < 0 || i > 4) return;
+
+  const it = player.hotbar[i];
+  if (!it) {
+    log(`Hotbar ${i + 1} is empty.`, "#aaa");
+    return;
+  }
+
+  if (applyItem(it)) {
+    player.hotbar[i] = null;
+  }
+}
+
+// ======================
+// Inventory usage
+// ======================
+function useInventoryItem(invIndex) {
+  const i = invIndex | 0;
+  if (i < 0 || i >= player.inv.length) return;
+
+  const it = player.inv[i];
+  if (applyItem(it)) {
+    player.inv.splice(i, 1);
+  }
+}
 
   function talkNearest() {
     let best = null;
@@ -1077,15 +1140,24 @@ buttons = [
   if (keys["m"]) { keys["m"] = false; mobileMenuOpen = !mobileMenuOpen; }
   if (keys["i"]) { keys["i"] = false; invOpen = !invOpen; }
 
-  // If inventory is open, block gameplay actions (after allowing toggles + scroll)
+  // If inventory is open: allow using selected item (Enter / Space), then block gameplay
   if (invOpen) {
+    if (keys["enter"] || keys[" "]) {
+      keys["enter"] = false;
+      keys[" "] = false;
+      useInventoryItem(invIndex);
+    }
     updateUI();
     return;
   }
 
   // Hotbar use (tap 1–5 or keyboard 1–5)
   for (let i = 1; i <= 5; i++) {
-    if (keys[String(i)]) { keys[String(i)] = false; useItem(i - 1); acted = true; }
+    if (keys[String(i)]) {
+      keys[String(i)] = false;
+      useHotbarItem(i - 1); // was useItem()
+      acted = true;
+    }
   }
 
   if (keys["t"]) { keys["t"] = false; talkNearest(); acted = true; }
