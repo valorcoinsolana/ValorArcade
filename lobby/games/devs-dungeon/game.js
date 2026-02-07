@@ -67,6 +67,10 @@ const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   let dpadRects = null; // {up,down,left,right} each {x,y,w,h}
   let buttons = [];
 
+  let desktopMenuButtonRect = null;
+let desktopMenuRects = null;
+
+
 
   // ✅ Mobile safe areas
   let MOBILE_UI_H = 0;             // reserved bottom for on-canvas controls
@@ -494,6 +498,7 @@ buttons = [
       // If tapped inside panel, swallow input so you don't move/act underneath
       if (hit(invUIRects.panel)) return;
     }
+    
 
 
     // Hotbar taps 1–5
@@ -568,6 +573,38 @@ buttons = [
     keys[e.key.toLowerCase()] = true;
   });
   addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+  function getMouse(e) {
+  const r = C.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+}
+
+function inRect(p, r) {
+  return r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+}
+
+C.addEventListener("mousedown", (e) => {
+  if (gameOver || win) return;
+  const p = getMouse(e);
+
+  // Click the small MENU button (desktop)
+  if (!isMobile && inRect(p, desktopMenuButtonRect)) {
+    keys["m"] = true;
+    e.preventDefault();
+    return;
+  }
+
+  // Click desktop menu items if open
+  if (!isMobile && mobileMenuOpen && desktopMenuRects) {
+    for (const r of desktopMenuRects) {
+      if (inRect(p, r)) {
+        keys[r.key] = true;
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+});
+
 
   // ======================
   // Part 5 - Save/Load/New
@@ -1161,12 +1198,13 @@ function useInventoryItem(index) {
   let lastActionAt = 0;
 
  function playerTurn() {
-  // If mobile menu is open, only allow menu actions + toggles (M / I)
-  if (mobileMenuOpen) {
-    if (!(keys["save"] || keys["load"] || keys["new"] || keys["m"] || keys["i"])) {
-      return;
-    }
+  // If menu is open, only allow menu actions + toggles (M / I)
+if (mobileMenuOpen) {
+  if (!(keys["save"] || keys["load"] || keys["new"] || keys["arcade"] || keys["m"] || keys["i"])) {
+    return;
   }
+}
+
 
  // Inventory navigation (when open)
 if (invOpen) {
@@ -1237,6 +1275,13 @@ if (invOpen) {
   if (keys["save"]) { keys["save"] = false; saveGame(); }
   if (keys["load"]) { keys["load"] = false; if (!loadGame()) log("No save found.", "#aaa"); }
   if (keys["new"])  { keys["new"]  = false; newGame(); acted = true; }
+   if (keys["arcade"]) {
+  keys["arcade"] = false;
+  // Return to Arcade hub
+  location.href = "https://valorcoinsolana.github.io/valorarcade/";
+  return;
+}
+
 
   if (keys["."]) { keys["."] = false; log("You wait.", "#aaa"); acted = true; }
 
@@ -1418,7 +1463,10 @@ if (invOpen) {
     if (didClip) CTX.restore();
 
     if (isMobile) drawMobileControls();
-    if (invOpen) drawInventoryOverlay();
+else drawDesktopMenuUI();
+
+if (invOpen) drawInventoryOverlay();
+
 
 
     if (gameOver || win) {
@@ -1619,6 +1667,80 @@ if (invOpen) {
   CTX.textBaseline = "top";
 }
 
+function drawDesktopMenuUI() {
+  // Small top-right MENU button
+  const btnW = 120, btnH = 30;
+  const x = W - btnW - 16;
+  const y = 16;
+
+  desktopMenuButtonRect = { x, y, w: btnW, h: btnH };
+
+  CTX.fillStyle = "rgba(0,0,0,0.55)";
+  CTX.fillRect(x, y, btnW, btnH);
+  CTX.strokeStyle = "rgba(0,255,120,0.22)";
+  CTX.strokeRect(x, y, btnW, btnH);
+  CTX.font = `bold 14px "Courier New", monospace`;
+  CTX.fillStyle = "rgba(0,255,180,0.85)";
+  CTX.textAlign = "center";
+  CTX.textBaseline = "middle";
+  CTX.fillText("MENU (M)", x + btnW/2, y + btnH/2);
+
+  // Menu overlay when open
+  if (!mobileMenuOpen) {
+    desktopMenuRects = null;
+    CTX.textAlign = "left";
+    CTX.textBaseline = "top";
+    return;
+  }
+
+  const mw = 280, mh = 220;
+  const mx = W - mw - 16;
+  const my = y + btnH + 10;
+
+  CTX.fillStyle = "rgba(0,0,0,0.72)";
+  CTX.fillRect(mx, my, mw, mh);
+  CTX.strokeStyle = "rgba(0,255,120,0.25)";
+  CTX.strokeRect(mx, my, mw, mh);
+
+  CTX.font = `bold 16px "Courier New", monospace`;
+  CTX.fillStyle = "rgba(0,255,180,0.85)";
+  CTX.textAlign = "left";
+  CTX.textBaseline = "top";
+  CTX.fillText("MENU", mx + 14, my + 14);
+
+  const opts = [
+    { k:"save",   t:"SAVE (P)" },
+    { k:"load",   t:"LOAD (L)" },
+    { k:"new",    t:"NEW (N)"  },
+    { k:"i",      t:"INVENTORY (I)" },
+    { k:"arcade", t:"ARCADE" },
+  ];
+
+  const rowY0 = my + 44;
+  const rowH = 36;
+
+  desktopMenuRects = opts.map((o, idx) => ({
+    key: o.k,
+    x: mx + 14,
+    y: rowY0 + idx * rowH,
+    w: mw - 28,
+    h: 30,
+    label: o.t
+  }));
+
+  CTX.font = `14px "Courier New", monospace`;
+  for (const rr of desktopMenuRects) {
+    CTX.fillStyle = "rgba(0,255,120,0.06)";
+    CTX.fillRect(rr.x, rr.y, rr.w, rr.h);
+    CTX.strokeStyle = "rgba(0,255,120,0.16)";
+    CTX.strokeRect(rr.x, rr.y, rr.w, rr.h);
+    CTX.fillStyle = "rgba(0,255,180,0.80)";
+    CTX.fillText(rr.label, rr.x + 10, rr.y + 8);
+  }
+
+  CTX.textAlign = "left";
+  CTX.textBaseline = "top";
+}
 
 
   function drawMobileControls() {
@@ -1688,12 +1810,13 @@ if (invOpen) {
       CTX.fillText("MENU", x + 14, y + 22);
 
      const opts = [
-  { k:"save", t:"SAVE" },
-  { k:"load", t:"LOAD" },
-  { k:"new",  t:"NEW"  },
-  { k:"i",    t:"INVENTORY" },
-  { k:"n",    t:"RESTART" },
+  { k:"save",   t:"SAVE" },
+  { k:"load",   t:"LOAD" },
+  { k:"new",    t:"NEW"  },
+  { k:"i",      t:"INVENTORY" },
+  { k:"arcade", t:"ARCADE" },
 ];
+
 
       const rowY0 = y + 44;
       const rowH = 40;
