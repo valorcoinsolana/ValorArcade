@@ -36,6 +36,7 @@
   // Part 1 - Globals
   // ======================
   let W = 1280, H = 720, TS = 26;
+const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   const SAVE_KEY = "abyss2026_v4";
 
   let gameLevel = 1;
@@ -53,8 +54,19 @@
   const keys = Object.create(null);
   const isMobile = navigator.maxTouchPoints > 0;
 
-  const joystick = { active:false, dx:0, dy:0, baseX:0, baseY:0, radius:0, knobR:0 };
+    // D-pad (touch)
+  const dpad = {
+    active: false,
+    dir: null, // "up" | "down" | "left" | "right"
+    cx: 0, cy: 0,
+    size: 0,
+    btn: 0,
+    gap: 0
+  };
+
+  let dpadRects = null; // {up,down,left,right} each {x,y,w,h}
   let buttons = [];
+
 
   // ✅ Mobile safe areas
   let MOBILE_UI_H = 0;             // reserved bottom for on-canvas controls
@@ -257,7 +269,7 @@
 
     const old = CTX.globalAlpha;
     CTX.globalAlpha = alpha;
-    CTX.drawImage(im, 0, 0, 16, 16, x, y, TS, TS);
+    CTX.drawImage(im, 0, 0, SPRITE_SRC, SPRITE_SRC, x, y, TS, TS);
     CTX.globalAlpha = old;
     return true;
   }
@@ -313,8 +325,10 @@
     const totalW = slots * size + (slots - 1) * pad;
     const startX = (W - totalW) / 2;
 
-    // Keep above joystick + bottom edge
-    const y = H - Math.max(140, MOBILE_UI_H - 40);
+        // Place hotbar near top of bottom reserved zone
+    const bottomTop = H - MOBILE_UI_H;
+    const y = bottomTop + 14;
+
 
     for (let i = 0; i < slots; i++) {
       hotbarRects.push({
@@ -331,24 +345,59 @@
     W = C.width = Math.min(innerWidth, 1440);
     H = C.height = Math.min(innerHeight, 820);
 
-    TS = Math.min((W / 70) | 0, (H / 42) | 0, 30);
+    TS = Math.min((W / 60) | 0, (H / 36) | 0, 40);
     TS = Math.max(TS, 14);
 
-    // Smaller joystick on phones
-    joystick.radius = Math.min(108, H * 0.13);
-    joystick.knobR = (joystick.radius * 0.38) | 0;
-    joystick.baseX = joystick.radius * 1.4 + 22;
-    joystick.baseY = H - joystick.radius * 1.35 - 22;
+       // Compact D-pad bottom-left
+    dpad.size = Math.min(170, Math.max(120, (Math.min(W, H) * 0.30) | 0));
+    dpad.btn  = (dpad.size * 0.30) | 0;   // each arrow button size
+    dpad.gap  = (dpad.size * 0.06) | 0;
 
-    // Reserve space so world doesn't sit under top HTML UI or bottom touch UI
-    if (isMobile) {
-      // If you want, you can tune this to match your actual top HUD size.
+    const margin = Math.max(18, TS);
+    dpad.cx = margin + dpad.size * 0.5;
+    dpad.cy = H - margin - dpad.size * 0.5;
+
+    // Precompute rects (up/down/left/right)
+    const b = dpad.btn, g = dpad.gap;
+    const cx = dpad.cx, cy = dpad.cy;
+    dpadRects = {
+  up: {
+    x: cx - b / 2,
+    y: cy - (b + g) - b / 2,
+    w: b,
+    h: b
+  },
+  down: {
+    x: cx - b / 2,
+    y: cy + (b + g) - b / 2,
+    w: b,
+    h: b
+  },
+  left: {
+    x: cx - (b + g) - b / 2,
+    y: cy - b / 2,
+    w: b,
+    h: b
+  },
+  right: {
+    x: cx + (b + g) - b / 2,
+    y: cy - b / 2,
+    w: b,
+    h: b
+  }
+};
+
+        if (isMobile) {
       MOBILE_TOP_UI_H = Math.min(H * 0.26, 210);
 
-      const joyH = joystick.radius * 2 + 40;
-      const hotbarH = 74; // ~56 + padding
-      const rightBtnH = 230;
-      MOBILE_UI_H = Math.min(H * 0.40, Math.max(joyH, hotbarH + 110, rightBtnH));
+      const dpadH = dpad.size + 24;
+      const hotbarH = 56 + 28; // hotbar + padding
+      const rightBtnH = 42 * 3 + 72; // 3 buttons + gaps
+
+      MOBILE_UI_H = Math.min(
+        H * 0.40,
+        Math.max(dpadH, hotbarH, rightBtnH)
+      );
 
       MOBILE_CAMERA_Y_OFFSET = (MOBILE_UI_H * 0.18) | 0;
     } else {
@@ -356,6 +405,7 @@
       MOBILE_UI_H = 0;
       MOBILE_CAMERA_Y_OFFSET = 0;
     }
+
 
     // Compressed mobile buttons
     buttons = [
@@ -376,14 +426,6 @@
   function getTouch(t) {
     const r = C.getBoundingClientRect();
     return { x: (t.clientX - r.left) * W / r.width, y: (t.clientY - r.top) * H / r.height };
-  }
-
-  function updateJoy(tx, ty) {
-    const dx = tx - joystick.baseX;
-    const dy = ty - joystick.baseY;
-    const d = Math.hypot(dx, dy);
-    if (d < joystick.radius) { joystick.dx = dx / joystick.radius; joystick.dy = dy / joystick.radius; }
-    else if (d) { joystick.dx = dx / d; joystick.dy = dy / d; }
   }
 
   function onTouchStart(e) {
@@ -419,23 +461,40 @@
       }
     }
 
-    // Joystick
-    const jd = Math.hypot(t.x - joystick.baseX, t.y - joystick.baseY);
-    if (jd <= joystick.radius * 1.7) { joystick.active = true; updateJoy(t.x, t.y); }
+        // D-pad press
+    if (dpadRects) {
+      const hit = (r) => (t.x >= r.x && t.x <= r.x + r.w && t.y >= r.y && t.y <= r.y + r.h);
+      if (hit(dpadRects.up))    { dpad.active = true; dpad.dir = "up"; return; }
+      if (hit(dpadRects.down))  { dpad.active = true; dpad.dir = "down"; return; }
+      if (hit(dpadRects.left))  { dpad.active = true; dpad.dir = "left"; return; }
+      if (hit(dpadRects.right)) { dpad.active = true; dpad.dir = "right"; return; }
+    }
+
   }
 
-  function onTouchMove(e) {
-    if (!joystick.active) return;
+    function onTouchMove(e) {
+    if (!dpad.active || !dpadRects) return;
     e.preventDefault();
+
     const t = getTouch(e.touches[0]);
-    updateJoy(t.x, t.y);
+    const hit = (r) => (t.x >= r.x && t.x <= r.x + r.w && t.y >= r.y && t.y <= r.y + r.h);
+
+    if (hit(dpadRects.up)) dpad.dir = "up";
+    else if (hit(dpadRects.down)) dpad.dir = "down";
+    else if (hit(dpadRects.left)) dpad.dir = "left";
+    else if (hit(dpadRects.right)) dpad.dir = "right";
+    else dpad.dir = null;
   }
 
-  function onTouchEnd(e) {
+
+    function onTouchEnd(e) {
     e && e.preventDefault && e.preventDefault();
     for (const b of buttons) keys[b.id] = false;
-    joystick.active = false; joystick.dx = 0; joystick.dy = 0;
+
+    dpad.active = false;
+    dpad.dir = null;
   }
+
 
   C.addEventListener("touchstart", onTouchStart, { passive: false });
   C.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -934,13 +993,15 @@
   // ======================
   // Part 9 - Turn loop
   // ======================
-  function getMoveFromInput() {
-    if (joystick.active) {
-      const ax = joystick.dx, ay = joystick.dy;
-      const th = 0.33;
-      if (Math.abs(ax) > Math.abs(ay)) { if (ax > th) return { dx: 1, dy: 0 }; if (ax < -th) return { dx: -1, dy: 0 }; }
-      else { if (ay > th) return { dx: 0, dy: 1 }; if (ay < -th) return { dx: 0, dy: -1 }; }
+    function getMoveFromInput() {
+    // D-pad (touch)
+    if (dpad.active && dpad.dir) {
+      if (dpad.dir === "up") return { dx: 0, dy: -1 };
+      if (dpad.dir === "down") return { dx: 0, dy: 1 };
+      if (dpad.dir === "left") return { dx: -1, dy: 0 };
+      if (dpad.dir === "right") return { dx: 1, dy: 0 };
     }
+
     if (keys["arrowup"] || keys["w"] || keys["k"]) return { dx: 0, dy: -1 };
     if (keys["arrowdown"] || keys["s"] || keys["j"]) return { dx: 0, dy: 1 };
     if (keys["arrowleft"] || keys["a"] || keys["h"]) return { dx: -1, dy: 0 };
@@ -951,6 +1012,18 @@
   let lastActionAt = 0;
 
   function playerTurn() {
+    if (mobileMenuOpen) {
+  // allow menu toggle + menu actions only
+  if (
+    keys["save"] || keys["load"] || keys["new"] ||
+    keys["m"]
+  ) {
+    // allowed
+  } else {
+    return;
+  }
+}
+
     const now = performance.now();
     if (now - lastActionAt < 95) return;
 
@@ -1191,21 +1264,28 @@
   }
 
   function drawMobileControls() {
-    // Joystick
-    const bx = joystick.baseX;
-    const by = joystick.baseY;
+  CTX.font = `bold 14px "Courier New", monospace`;
+  CTX.textAlign = "center";
+  CTX.textBaseline = "middle";
 
-    CTX.fillStyle = "rgba(0,255,120,0.07)";
-    CTX.beginPath(); CTX.arc(bx, by, joystick.radius, 0, Math.PI*2); CTX.fill();
-    CTX.strokeStyle = "rgba(0,255,120,0.22)";
-    CTX.beginPath(); CTX.arc(bx, by, joystick.radius, 0, Math.PI*2); CTX.stroke();
+  // D-pad
+  if (!dpadRects) return;
 
-    const kx = bx + joystick.dx * (joystick.radius - joystick.knobR);
-    const ky = by + joystick.dy * (joystick.radius - joystick.knobR);
-    CTX.fillStyle = "rgba(0,255,160,0.16)";
-    CTX.beginPath(); CTX.arc(kx, ky, joystick.knobR, 0, Math.PI*2); CTX.fill();
-    CTX.strokeStyle = "rgba(0,255,160,0.30)";
-    CTX.beginPath(); CTX.arc(kx, ky, joystick.knobR, 0, Math.PI*2); CTX.stroke();
+
+    const drawBtn = (r, label) => {
+      CTX.fillStyle = "rgba(0,255,120,0.07)";
+      CTX.fillRect(r.x, r.y, r.w, r.h);
+      CTX.strokeStyle = "rgba(0,255,120,0.22)";
+      CTX.strokeRect(r.x, r.y, r.w, r.h);
+      CTX.fillStyle = "rgba(0,255,180,0.80)";
+      CTX.fillText(label, r.x + r.w/2, r.y + r.h/2);
+    };
+
+    drawBtn(dpadRects.up, "▲");
+    drawBtn(dpadRects.down, "▼");
+    drawBtn(dpadRects.left, "◀");
+    drawBtn(dpadRects.right, "▶");
+
 
     // Buttons + hotbar
     CTX.font = `bold 14px "Courier New", monospace`;
