@@ -103,7 +103,7 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
   const GAS_CFG = {
     move: 1,      // every successful step
     attack: 3,    // when you swing at an enemy
-    wait: 1,      // "." wait costs gas too
+    wait: 0,      // "." wait costs no gas 
     min: 0
   };
 
