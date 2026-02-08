@@ -2670,16 +2670,24 @@ if (hasDpad) {
 
     // Right cluster (WAIT/TALK/MENU) - tight boxes
 for (const b of buttons) {
-  const r = b.rect || { x: b.cx - b.r, y: b.cy - b.r, w: b.r * 2, h: b.r * 2 };
+  const hit = b.rect;
+  if (!hit) continue;
+
+  // 👇 visual box is smaller than hit box
+  const vScale = 0.68; // ← THIS controls how tight it looks
+  const vw = (hit.w * vScale) | 0;
+  const vh = (hit.h * vScale) | 0;
+  const vx = (hit.x + (hit.w - vw) / 2) | 0;
+  const vy = (hit.y + (hit.h - vh) / 2) | 0;
 
   CTX.fillStyle = "rgba(0,255,120,0.08)";
-  CTX.fillRect(r.x, r.y, r.w, r.h);
+  CTX.fillRect(vx, vy, vw, vh);
 
   CTX.strokeStyle = "rgba(0,255,120,0.22)";
-  CTX.strokeRect(r.x, r.y, r.w, r.h);
+  CTX.strokeRect(vx, vy, vw, vh);
 
-  CTX.fillStyle = "rgba(0,255,160,0.75)";
-  CTX.fillText(b.label, r.x + r.w / 2, r.y + r.h / 2);
+  CTX.fillStyle = "rgba(0,255,160,0.85)";
+  CTX.fillText(b.label, vx + vw / 2, vy + vh / 2);
 }
 
 
