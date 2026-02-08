@@ -544,7 +544,7 @@ function enemyFrames(ch) {
   }
     // Cache tight box rects for WAIT/TALK/MENU (used for draw + hit-test)
   for (const b of buttons) {
-    const s = (b.r * 2) | 0; // square side length
+    const s = (b.r * 1.3) | 0; // square side length
     b.rect = {
       x: (b.cx - s / 2) | 0,
       y: (b.cy - s / 2) | 0,
