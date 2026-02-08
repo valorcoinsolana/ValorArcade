@@ -163,6 +163,24 @@ playerR: ["assets/tiles/player_r_0.png", "assets/tiles/player_r_1.png"],
     enemyP: ["assets/tiles/enemy_pump_fiend_0.png","assets/tiles/enemy_pump_fiend_1.png"],
     enemyB: ["assets/tiles/enemy_bot_swarm_0.png","assets/tiles/enemy_bot_swarm_1.png"],
     enemyW: ["assets/tiles/enemy_whale_shade_0.png","assets/tiles/enemy_whale_shade_1.png"],
+        // Enemies (new tiers)
+    enemyG: ["assets/tiles/enemy_gas_guzzler_0.png","assets/tiles/enemy_gas_guzzler_1.png"],
+    enemyL: ["assets/tiles/enemy_liquidity_leech_0.png","assets/tiles/enemy_liquidity_leech_1.png"],
+    enemyO: ["assets/tiles/enemy_oracle_wraith_0.png","assets/tiles/enemy_oracle_wraith_1.png"],
+    enemyS: ["assets/tiles/enemy_slippage_horror_0.png","assets/tiles/enemy_slippage_horror_1.png"],
+    enemyM: ["assets/tiles/enemy_mev_sniper_0.png","assets/tiles/enemy_mev_sniper_1.png"],
+    enemyD: ["assets/tiles/enemy_dust_hoarder_0.png","assets/tiles/enemy_dust_hoarder_1.png"],
+    enemyT: ["assets/tiles/enemy_bridge_troll_0.png","assets/tiles/enemy_bridge_troll_1.png"],
+    enemyH: ["assets/tiles/enemy_governance_ghoul_0.png","assets/tiles/enemy_governance_ghoul_1.png"],
+    enemyK: ["assets/tiles/enemy_forked_abomination_0.png","assets/tiles/enemy_forked_abomination_1.png"],
+    enemyV: ["assets/tiles/enemy_validator_revenant_0.png","assets/tiles/enemy_validator_revenant_1.png"],
+    enemyZ: ["assets/tiles/enemy_zk_stalker_0.png","assets/tiles/enemy_zk_stalker_1.png"],
+    enemyX: ["assets/tiles/enemy_flash_loan_lich_0.png","assets/tiles/enemy_flash_loan_lich_1.png"],
+    enemyC: ["assets/tiles/enemy_consensus_breaker_0.png","assets/tiles/enemy_consensus_breaker_1.png"],
+    enemyY: ["assets/tiles/enemy_finality_phantom_0.png","assets/tiles/enemy_finality_phantom_1.png"],
+    enemyQ: ["assets/tiles/enemy_black_swan_entity_0.png","assets/tiles/enemy_black_swan_entity_1.png"],
+    enemyG2: ["assets/tiles/enemy_genesis_parasite_0.png","assets/tiles/enemy_genesis_parasite_1.png"],
+
 
     // Items
     itemPotion: ["assets/tiles/item_potion_0.png","assets/tiles/item_potion_1.png"],
@@ -309,14 +327,38 @@ playerR: ["assets/tiles/player_r_0.png", "assets/tiles/player_r_1.png"],
     if (ch === ">") return GFX.frames.stairsDown;
     return null;
   }
-  function enemyFrames(ch) {
-    if (ch === "f") return GFX.frames.enemyF;
-    if (ch === "r") return GFX.frames.enemyR;
-    if (ch === "p") return GFX.frames.enemyP;
-    if (ch === "b") return GFX.frames.enemyB;
-    if (ch === "w") return GFX.frames.enemyW;
-    return null;
-  }
+  const ENEMY_FRAME_BY_CH = {
+  f: "enemyF",
+  r: "enemyR",
+  p: "enemyP",
+  b: "enemyB",
+  w: "enemyW",
+
+  g: "enemyG",
+  l: "enemyL",
+  o: "enemyO",
+  s: "enemyS",
+  m: "enemyM",
+  d: "enemyD",
+  t: "enemyT",
+  h: "enemyH",
+  k: "enemyK",
+  v: "enemyV",
+  z: "enemyZ",
+  x: "enemyX",
+  c: "enemyC",
+  y: "enemyY",
+  q: "enemyQ",
+
+  // capital G enemy (Genesis Parasite)
+  G: "enemyG2",
+};
+
+function enemyFrames(ch) {
+  const key = ENEMY_FRAME_BY_CH[ch];
+  return key ? GFX.frames[key] : null;
+}
+
   function itemFrames(ch) {
     if (ch === "!") return GFX.frames.itemPotion;
     if (ch === "$") return GFX.frames.itemGas;
