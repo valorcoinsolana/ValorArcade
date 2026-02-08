@@ -1151,7 +1151,13 @@ const scale = 1 + g * 0.05 + g * g * 0.001;
     const r = player.vision;
     for (let y = Math.max(0, player.y - r - 1); y <= Math.min(map.length - 1, player.y + r + 1); y++) {
       for (let x = Math.max(0, player.x - r - 1); x <= Math.min(map[0].length - 1, player.x + r + 1); x++) {
-        if (isVisible(x, y)) explored[y][x] = true;
+        if (isVisible(x, y)) {
+  explored[y][x] = true;
+
+  // ✅ if the stairs are visible, ensure they become explored for minimap marker
+  if (map[y]?.[x] === ">") explored[y][x] = true;
+}
+
       }
     }
   }
@@ -1416,6 +1422,8 @@ function useInventoryItem(index) {
     for (let x = 0; x < map[0].length; x++) {
       if (map[y][x] === ">") {
         explored[y][x] = true;
+        revealFog();     // refresh local visibility edges (optional but feels instant)
+updateUI();      // harmless; keeps UI synced
         log("Meme Lord leaks the stair coords 👀", "#9ff");
         return;
       }
@@ -2063,11 +2071,24 @@ if (isMobile && !deathMenuShown) {
   const sy = mh / map.length;
 
   for (let y = 0; y < map.length; y++) for (let x = 0; x < map[0].length; x++) {
-    if (!explored[y][x]) continue;
-    const ch = map[y][x];
-    CTX.fillStyle = (ch === "#") ? "rgba(0,80,40,0.25)" : "rgba(0,255,120,0.10)";
-    CTX.fillRect(x0 + x * sx, y0 + y * sy, sx + 0.5, sy + 0.5);
+  if (!explored[y][x]) continue;
+
+  const ch = map[y][x];
+
+  // base minimap shading
+  CTX.fillStyle = (ch === "#") ? "rgba(0,80,40,0.25)" : "rgba(0,255,120,0.10)";
+  CTX.fillRect(x0 + x * sx, y0 + y * sy, sx + 0.5, sy + 0.5);
+
+  // ✅ stairs marker (white square) once explored (by talk OR by walking nearby)
+  if (ch === ">") {
+    CTX.fillStyle = "rgba(255,255,255,0.95)";
+    // make it a bit chunkier than a single pixel
+    const px = x0 + x * sx;
+    const py = y0 + y * sy;
+    CTX.fillRect(px, py, Math.max(2, sx + 0.5), Math.max(2, sy + 0.5));
   }
+}
+
 
   CTX.fillStyle = "rgba(0,255,180,0.9)";
   CTX.fillRect(x0 + player.x * sx - 1, y0 + player.y * sy - 1, 3, 3);
