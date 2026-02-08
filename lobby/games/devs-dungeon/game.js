@@ -526,23 +526,17 @@ for (let i = buttons.length - 1; i >= 0; i--) {
   const totalW = slots * size + (slots - 1) * hotPad;
 
   // hotbar sits near the TOP of the bottom UI zone
-  const y = bottomTop + 12;
+const hotbarY = bottomTop + 12;
 
-  // startX tries to center within available space, but never enters D-pad area
-  let startX = minX + Math.max(0, (availW - totalW) / 2);
-
-  // final clamp to screen
-  startX = clamp(startX, 14, W - totalW - 14);
-
-  for (let i = 0; i < slots; i++) {
-    hotbarRects.push({
-      slot: i,
-      x: startX + i * (size + hotPad),
-      y,
-      w: size,
-      h: size
-    });
-  }
+for (let i = 0; i < slots; i++) {
+  hotbarRects.push({
+    slot: i,
+    x: startX + i * (size + hotPad),
+    y: hotbarY,
+    w: size,
+    h: size
+  });
+}
 }
 
   function resize() {
@@ -659,7 +653,15 @@ buttons = [
 
       // 2) Allow tapping the MENU circle itself to open/close
       for (const b of buttons) {
-        if (b.id === "m" && Math.hypot(t.x - b.cx, t.y - b.cy) <= b.r) {
+        for (const b of buttons) {
+  if (b.id === "m" &&
+      t.x >= b.x && t.x <= b.x + b.w &&
+      t.y >= b.y && t.y <= b.y + b.h) {
+    keys["m"] = true;
+    return;
+  }
+}
+        {
           keys["m"] = true;
           return;
         }
@@ -1915,7 +1917,6 @@ if (invOpen) {
 
 if (keys["."]) {
   keys["."] = false;
-  spendGas(GAS_CFG.wait, "wait");
   log("You wait.", "#aaa");
   acted = true;
 }
