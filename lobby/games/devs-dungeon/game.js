@@ -1364,7 +1364,14 @@ if (invOpen) {
 
   // --- Toggles always allowed ---
   if (keys["m"]) { keys["m"] = false; mobileMenuOpen = !mobileMenuOpen; }
-  if (keys["i"]) { keys["i"] = false; invOpen = !invOpen; }
+  if (keys["i"]) {
+  keys["i"] = false;
+  invOpen = !invOpen;
+
+  // ✅ prevent menu overlapping inventory
+  if (invOpen) mobileMenuOpen = false;
+}
+
 
   if (invOpen) {
   // Use item: Enter or Space (desktop)
@@ -1982,7 +1989,7 @@ if (hasDpad) {
 
     // Menu overlay (SAVE/LOAD/NEW)
     // Menu overlay (SAVE/LOAD/NEW/INVENTORY/ARCADE)
-if (mobileMenuOpen) {
+if (mobileMenuOpen && !invOpen) {
   const opts = [
     { k:"save",   t:"SAVE" },
     { k:"load",   t:"LOAD" },
