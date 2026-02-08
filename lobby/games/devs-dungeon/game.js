@@ -488,17 +488,20 @@ function enemyFrames(ch) {
   // ----------------------
   // 1) Right-side buttons: WAIT / TALK / MENU (horizontal, anchored right)
   // ----------------------
-  const r = (buttons[0] ? buttons[0].r : 42);
   const pad = 14;
+const gap = 10;
 
-  // place them near the bottom of the reserved UI zone
-  const btnY = H - r - pad;
-  const gap = (r * 2) + 12; // spacing between circle centers
+const bw = buttons[0].w;
+const bh = buttons[0].h;
 
-  const menuX = W - r - pad;
-  if (buttons[2]) { buttons[2].cx = menuX;         buttons[2].cy = btnY; } // MENU
-  if (buttons[1]) { buttons[1].cx = menuX - gap;   buttons[1].cy = btnY; } // TALK
-  if (buttons[0]) { buttons[0].cx = menuX - gap*2; buttons[0].cy = btnY; } // WAIT
+const y = H - bh - pad;
+let x = W - bw - pad;
+
+for (let i = buttons.length - 1; i >= 0; i--) {
+  buttons[i].x = x;
+  buttons[i].y = y;
+  x -= bw + gap;
+}
 
 
   // ----------------------
@@ -609,11 +612,13 @@ TS = Math.max(TS, 30);
 
 
     // Compressed mobile buttons
-    const r = clamp((TS * 1.6) | 0, 30, 42); // smaller on small screens
+    const bw = clamp((TS * 2.2) | 0, 64, 90);
+const bh = clamp((TS * 1.2) | 0, 34, 44);
+
 buttons = [
-  { id: ".", label: "WAIT", r },
-  { id: "t", label: "TALK", r },
-  { id: "m", label: "MENU", r },
+  { id: ".", label: "WAIT", w: bw, h: bh },
+  { id: "t", label: "TALK", w: bw, h: bh },
+  { id: "m", label: "MENU", w: bw, h: bh },
 ];
 
 
@@ -711,10 +716,13 @@ buttons = [
 
     // Buttons (WAIT/TALK/MENU)
     for (const b of buttons) {
-      if (Math.hypot(t.x - b.cx, t.y - b.cy) <= b.r) {
-        keys[b.id] = true;
-        return;
-      }
+      if (
+  t.x >= b.x && t.x <= b.x + b.w &&
+  t.y >= b.y && t.y <= b.y + b.h
+) {
+  keys[b.id] = true;
+  return;
+}
     }
 
         // D-pad press
@@ -2675,12 +2683,18 @@ if (hasDpad) {
 
     // Right cluster (WAIT/TALK/MENU)
     for (const b of buttons) {
-      CTX.fillStyle = "rgba(0,255,120,0.08)";
-      CTX.beginPath(); CTX.arc(b.cx, b.cy, b.r, 0, Math.PI*2); CTX.fill();
-      CTX.strokeStyle = "rgba(0,255,120,0.22)";
-      CTX.beginPath(); CTX.arc(b.cx, b.cy, b.r, 0, Math.PI*2); CTX.stroke();
-      CTX.fillStyle = "rgba(0,255,160,0.75)";
-      CTX.fillText(b.label, b.cx, b.cy);
+     CTX.fillStyle = "rgba(0,255,120,0.10)";
+CTX.fillRect(b.x, b.y, b.w, b.h);
+
+CTX.strokeStyle = "rgba(0,255,120,0.28)";
+CTX.strokeRect(b.x, b.y, b.w, b.h);
+
+CTX.fillStyle = "rgba(0,255,180,0.9)";
+CTX.fillText(
+  b.label,
+  b.x + b.w / 2,
+  b.y + b.h / 2
+);
     }
 
    // Hotbar row (tap 1–5) — draw icon + qty
