@@ -129,10 +129,17 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
   }
 
   function log(msg, color = "#ccc") {
-    messages.push({ t: msg, c: color });
-    if (messages.length > 10) messages.shift();
-    UI.log.innerHTML = messages.map(x => `<div style="color:${x.c}">${escapeHtml(x.t)}</div>`).join("");
-  }
+  messages.push({ t: msg, c: color });
+  if (messages.length > 10) messages.shift();
+
+  UI.log.innerHTML = messages
+    .map(x => `<div style="color:${x.c}">${escapeHtml(x.t)}</div>`)
+    .join("");
+
+  // ✅ auto-scroll to newest message
+  UI.log.scrollTop = UI.log.scrollHeight;
+}
+
 
   // ======================
   // Part X - Animated Pixel Art Assets (16x16)
