@@ -1388,8 +1388,9 @@ function useInventoryItem(index) {
 
   switch (n.role) {
     case "lore":
-      revealRandomMapHint();
-      break;
+  revealStairsLocation();   // always stairs
+  break;
+
 
     case "trader":
       npcTrade(n);
@@ -1400,6 +1401,19 @@ function useInventoryItem(index) {
       break;
   }
 }
+  function revealStairsLocation() {
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[0].length; x++) {
+      if (map[y][x] === ">") {
+        explored[y][x] = true;
+        log("Meme Lord leaks the stair coords 👀", "#9ff");
+        return;
+      }
+    }
+  }
+  log("No stairs found to reveal (weird).", "#f96");
+}
+
 function revealRandomMapHint() {
   const options = [];
 
@@ -1522,7 +1536,7 @@ player.stepAt = performance.now();
     if (it) pickupItem(it);
 
     if (map[ny][nx] === ">") {
-      if (gameLevel >= 25) {
+      if (gameLevel >= 100) {
         win = true;
         meta.wins = (meta.wins || 0) + 1;
         log("GENESIS BLOCK FOUND. You escaped with an immutable Lambo.", "#0ff");
@@ -2471,7 +2485,7 @@ if (mobileMenuOpen && !invOpen) {
     [
       "2026 — Dev, you got rugged again. Rugpull.eth 3.0 stole your life savings.",
       "Glitched wallet → sucked into the chain. Now you're in the Abyss.",
-      "Reach floor 25 → Genesis Block → rewrite tx#0 → escape with an immutable Lambo.",
+      "Reach floor 100 → Genesis Block → rewrite tx#0 → escape with an immutable Lambo.",
       "GM degens. WAGMI if diamond hands. NGMI if paper hands."
     ].forEach(l => log(l, "#ff9"));
   }
