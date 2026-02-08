@@ -678,6 +678,26 @@ C.addEventListener("mousedown", (e) => {
 if (!player.facing) player.facing = "down";
 if (player.step !== 0 && player.step !== 1) player.step = 0;
 if (!player.stepAt) player.stepAt = 0;
+      // --- migrate old inventory/hotbar items to stacks ---
+function normalizeStackEntry(s) {
+  if (!s) return s;
+  if (s.qty == null) s.qty = 1;
+  if (s.max == null) s.max = stackMaxForKind(s.kind);
+  return s;
+}
+
+if (player.inv && Array.isArray(player.inv)) {
+  player.inv = player.inv.map(normalizeStackEntry);
+} else {
+  player.inv = [];
+}
+
+if (player.hotbar && Array.isArray(player.hotbar)) {
+  player.hotbar = player.hotbar.map(normalizeStackEntry);
+} else {
+  player.hotbar = [null, null, null, null, null];
+}
+
 
       entities = d.entities || [];
       items = d.items || [];
@@ -834,6 +854,25 @@ stepAt: 0,          // timestamp of last step toggle
     { name:"Defense Patch", kind:"def",  amount: 1,  ch:"*", color:"#6ff", hotbar:false },
     { name:"Airdrop XP",    kind:"xp",   amount: 40, ch:"?", color:"#9f9", hotbar:true },
   ];
+  // ======================
+// Stacking rules
+// ======================
+function stackMaxForKind(kind) {
+  // tweak these however you like
+  if (kind === "heal") return 9;
+  if (kind === "gas")  return 9;
+  if (kind === "xp")   return 9;
+  if (kind === "atk")  return 9;
+  if (kind === "def")  return 9;
+  return 1;
+}
+
+function sameStack(a, b) {
+  // define what makes items "the same stack"
+  // (kind + amount is usually enough)
+  return a && b && a.kind === b.kind && a.amount === b.amount;
+}
+
 
   const NPC_TYPES = [
     { name:"Meme Lord",  ch:"M", color:"#ff9", lines:["GM. Your bags are heavy.","Diamond hands or NGMI.","I sold the top (I didn't)."]},
@@ -1102,42 +1141,76 @@ const scale = 1 + g * 0.05 + g * g * 0.001;
 
  function pickupItem(it) {
   if (!it) return;
-  if (player.inv.length >= 15) {
-    log("Inventory full (15).", "#f96");
-    return;
+
+  const stackMax = stackMaxForKind(it.kind);
+
+  // Helper: try to add 1 into an array of stacks (inv or hotbar)
+  function addToStacks(arr) {
+    // 1) fill existing stack first
+    for (const s of arr) {
+      if (!s) continue;
+      if (sameStack(s, it) && (s.qty | 0) < (s.max | 0)) {
+        s.qty = (s.qty | 0) + 1;
+        return true;
+      }
+    }
+    return false;
   }
 
-  let placed = false;
+  // Helper: create a new stack in inventory (if space)
+  function addNewInvStack() {
+    if (player.inv.length >= 15) return false;
+    player.inv.push({
+      name: it.name,
+      kind: it.kind,
+      amount: it.amount,
+      ch: it.ch,
+      qty: 1,
+      max: stackMax
+    });
+    return true;
+  }
 
-  // auto-place usable items into hotbar
+  // 1) If it belongs on hotbar, try hotbar stacks/empty slots first
   if (it.hotbar) {
+    // fill an existing hotbar stack
+    if (addToStacks(player.hotbar)) {
+      log(`Picked up: ${it.name}`, "#0ff");
+      beep(880, 0.05, 0.10);
+      items = items.filter(x => x !== it);
+      return;
+    }
+
+    // put into an empty hotbar slot (new stack)
     for (let i = 0; i < 5; i++) {
       if (!player.hotbar[i]) {
         player.hotbar[i] = {
           name: it.name,
           kind: it.kind,
           amount: it.amount,
-          ch: it.ch
+          ch: it.ch,
+          qty: 1,
+          max: stackMax
         };
-        placed = true;
-        break;
+        log(`Picked up: ${it.name}`, "#0ff");
+        beep(880, 0.05, 0.10);
+        items = items.filter(x => x !== it);
+        return;
       }
     }
   }
 
-  if (!placed) {
-    player.inv.push({
-      name: it.name,
-      kind: it.kind,
-      amount: it.amount,
-      ch: it.ch
-    });
+  // 2) Otherwise (or hotbar full), try inventory stacks
+  if (addToStacks(player.inv) || addNewInvStack()) {
+    log(`Picked up: ${it.name}`, "#0ff");
+    beep(880, 0.05, 0.10);
+    items = items.filter(x => x !== it);
+    return;
   }
 
-  log(`Picked up: ${it.name}`, "#0ff");
-  beep(880, 0.05, 0.10);
-  items = items.filter(x => x !== it);
+  log("Inventory full (15).", "#f96");
 }
+
 
 // ======================
 // Item usage (shared)
@@ -1201,7 +1274,8 @@ function useHotbarItem(slotIndex) {
   }
 
   if (applyItem(it)) {
-    player.hotbar[i] = null;
+    it.qty = ((it.qty ?? 1) | 0) - 1;
+    if (it.qty <= 0) player.hotbar[i] = null;
   }
 }
 
@@ -1215,13 +1289,13 @@ function useInventoryItem(index) {
 
   if (!applyItem(it)) return;
 
-  // remove used item
-  player.inv.splice(i, 1);
+  it.qty = ((it.qty ?? 1) | 0) - 1;
 
-  // keep cursor valid
-  invIndex = clamp(invIndex, 0, Math.max(0, player.inv.length - 1));
+  if (it.qty <= 0) {
+    player.inv.splice(i, 1);
+    invIndex = clamp(invIndex, 0, Math.max(0, player.inv.length - 1));
+  }
 }
-
 
 
   function talkNearest() {
@@ -1820,7 +1894,12 @@ if (isMobile && !deathMenuShown) {
     const it = player.hotbar[i];
     const yy = listY + (i + 1) * lineH;
     CTX.fillStyle = "rgba(0,255,160,0.70)";
-    CTX.fillText(`${i + 1}: ${it ? it.name : "(empty)"}`, listX, yy);
+    CTX.fillText(
+  `${i + 1}: ${it ? (it.name + (it.qty > 1 ? " x" + it.qty : "")) : "(empty)"}`,
+  listX,
+  yy
+);
+
   }
 
   // Inventory header
@@ -1866,8 +1945,11 @@ if (isMobile && !deathMenuShown) {
     const it = player.inv[idx];
     CTX.font = `16px "Courier New", monospace`;
     CTX.fillStyle = (idx === invIndex) ? "rgba(0,255,200,0.95)" : "rgba(0,255,160,0.85)";
-    CTX.fillText(`${idx + 1}. ${it.name}`, listX, yy);
-
+    CTX.fillText(
+  `${idx + 1}. ${it.name}${(it.qty > 1) ? (" x" + it.qty) : ""}`,
+  listX,
+  yy
+);
     rows.push({ i: idx, x: listX - 6, y: yy - 2, w: rowW, h: lineH });
   }
 
@@ -2053,17 +2135,60 @@ if (hasDpad) {
       CTX.fillText(b.label, b.cx, b.cy);
     }
 
-    // Hotbar row (tap 1–5)
-    for (let i = 0; i < hotbarRects.length; i++) {
-      const r = hotbarRects[i];
-      CTX.fillStyle = "rgba(0,255,120,0.07)";
-      CTX.fillRect(r.x, r.y, r.w, r.h);
-      CTX.strokeStyle = "rgba(0,255,120,0.18)";
-      CTX.strokeRect(r.x, r.y, r.w, r.h);
+   // Hotbar row (tap 1–5) — draw icon + qty
+for (let i = 0; i < hotbarRects.length; i++) {
+  const r = hotbarRects[i];
 
+  // slot background
+  CTX.fillStyle = "rgba(0,255,120,0.07)";
+  CTX.fillRect(r.x, r.y, r.w, r.h);
+  CTX.strokeStyle = "rgba(0,255,120,0.18)";
+  CTX.strokeRect(r.x, r.y, r.w, r.h);
+
+  const it = player.hotbar[i];
+
+  if (it) {
+    // draw item icon (use the same sprite frames as ground items)
+    const frames = itemFrames(it.ch);
+    const im = (frames && frames[0]) || firstAvailableFrame(frames);
+
+    if (im) {
+      const pad = 5;
+      const size = Math.min(r.w, r.h) - pad * 2;
+      CTX.drawImage(im, 0, 0, SPRITE_SRC, SPRITE_SRC, r.x + pad, r.y + pad, size, size);
+    } else {
+      // fallback if art missing
       CTX.fillStyle = "rgba(0,255,180,0.75)";
       CTX.fillText(String(i + 1), r.x + r.w / 2, r.y + r.h / 2);
     }
+
+    // qty badge (only if > 1)
+    const q = (it.qty ?? 1) | 0;
+    if (q > 1) {
+      CTX.save();
+      CTX.textAlign = "right";
+      CTX.textBaseline = "bottom";
+      CTX.font = `bold ${Math.max(12, (TS * 0.38) | 0)}px "Courier New", monospace`;
+
+      // tiny dark backing so it’s readable
+      CTX.fillStyle = "rgba(0,0,0,0.55)";
+      const tx = r.x + r.w - 4;
+      const ty = r.y + r.h - 3;
+      const w = Math.max(14, (String(q).length * 8) + 10);
+      const h = 16;
+      CTX.fillRect(tx - w, ty - h, w, h);
+
+      CTX.fillStyle = "rgba(0,255,200,0.95)";
+      CTX.fillText(String(q), tx, ty);
+      CTX.restore();
+    }
+  } else {
+    // empty slot: show slot number
+    CTX.fillStyle = "rgba(0,255,180,0.75)";
+    CTX.fillText(String(i + 1), r.x + r.w / 2, r.y + r.h / 2);
+  }
+}
+
 
     // Menu overlay (SAVE/LOAD/NEW)
     // Menu overlay (SAVE/LOAD/NEW/INVENTORY/ARCADE)
