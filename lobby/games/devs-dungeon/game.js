@@ -502,53 +502,28 @@ function enemyFrames(ch) {
   const bottomTop = H - MOBILE_UI_H;
 
   // ----------------------
-  // 1) Right-side buttons: WAIT / TALK / MENU (horizontal, anchored right)
+  // 1) Right-side buttons: WAIT / TALK / MENU (anchored right)
   // ----------------------
   const pad = 14;
-const gap = 10;
+  const gap = 10;
 
-const bw = buttons[0].w;
-const bh = buttons[0].h;
+  const bw = buttons[0]?.w || 80;
+  const bh = buttons[0]?.h || 40;
 
-const y = H - bh - pad;
-let x = W - bw - pad;
+  const y = H - bh - pad;
+  let x = W - bw - pad;
 
-for (let i = buttons.length - 1; i >= 0; i--) {
-  buttons[i].x = x;
-  buttons[i].y = y;
-  x -= bw + gap;
-}
-
+  for (let i = buttons.length - 1; i >= 0; i--) {
+    buttons[i].x = x;
+    buttons[i].y = y;
+    x -= bw + gap;
+  }
 
   // ----------------------
   // 2) Hotbar: shift right to avoid D-pad AND shrink if needed
   // ----------------------
   hotbarRects = [];
-  const slots = 5;
-  const hotPad = 10;
 
-  // D-pad right edge + padding = "do not start before this"
-  const dpadRightEdge = dpad.cx + dpad.size * 0.5;
-  const minX = isMobile ? (dpadRightEdge + 22) : 14;
-  const maxX = W - 14;
-
-  // available width for hotbar after avoiding D-pad
-  const availW = Math.max(120, maxX - minX);
-  let size = Math.floor((availW - (slots - 1) * hotPad) / slots);
-
-  // clamp so it doesn't get tiny or huge
-  size = clamp(size, 40, 56);
-
-  const totalW = slots * size + (slots - 1) * hotPad;
-
-  // hotbar sits near the TOP of the bottom UI zone
-const hotbarY = bottomTop + 12;
-
-for (let i = 0; i < slots; i++) {
-    // ----------------------
-  // 2) Hotbar: shift right to avoid D-pad AND shrink if needed
-  // ----------------------
-  hotbarRects = [];
   const slots = 5;
   const hotPad = 10;
 
@@ -565,11 +540,11 @@ for (let i = 0; i < slots; i++) {
 
   const totalW = slots * size + (slots - 1) * hotPad;
 
-  // ✅ center hotbar within available space (but never before minX)
+  // center hotbar within available space (but never before minX)
   const startX = minX + Math.max(0, ((availW - totalW) / 2) | 0);
 
   // hotbar sits near the TOP of the bottom UI zone
-  const hotbarY = (H - MOBILE_UI_H) + 12;
+  const hotbarY = bottomTop + 12;
 
   for (let i = 0; i < slots; i++) {
     hotbarRects.push({
@@ -580,8 +555,8 @@ for (let i = 0; i < slots; i++) {
       h: size
     });
   }
-
 }
+
 }
 
   function resize() {
@@ -686,35 +661,34 @@ buttons = [
     const t = getTouch(e.changedTouches[0]);
         // If dead/win: only allow tapping MENU button + menu options
     if (dead) {
-      // 1) Menu option taps when menu open
-      if (window.__mobileMenuRects && mobileMenuOpen) {
-        for (const r of window.__mobileMenuRects) {
-          if (t.x >= r.x && t.x <= r.x + r.w && t.y >= r.y && t.y <= r.y + r.h) {
-            keys[r.key] = true;
-            return;
-          }
-        }
+  // 1) If menu is open, allow tapping menu option rows
+  if (window.__mobileMenuRects && mobileMenuOpen) {
+    for (const r of window.__mobileMenuRects) {
+      if (
+        t.x >= r.x && t.x <= r.x + r.w &&
+        t.y >= r.y && t.y <= r.y + r.h
+      ) {
+        keys[r.key] = true; // "new", "save", "load", "arcade", etc.
+        return;
       }
-
-      // 2) Allow tapping the MENU circle itself to open/close
-      for (const b of buttons) {
-        for (const b of buttons) {
-  if (b.id === "m" &&
-      t.x >= b.x && t.x <= b.x + b.w &&
-      t.y >= b.y && t.y <= b.y + b.h) {
-    keys["m"] = true;
-    return;
+    }
   }
-}
-        {
-          keys["m"] = true;
-          return;
-        }
-      }
 
-      // swallow all other touches while dead
+  // 2) Always allow tapping the MENU button itself to open/close menu
+  for (const b of buttons) {
+    if (
+      b.id === "m" &&
+      t.x >= b.x && t.x <= b.x + b.w &&
+      t.y >= b.y && t.y <= b.y + b.h
+    ) {
+      keys["m"] = true;
       return;
     }
+  }
+
+  // 3) Swallow ALL other touches while dead/win
+  return;
+}
 
         // Inventory overlay taps (mobile)
     if (invOpen && invUIRects) {
