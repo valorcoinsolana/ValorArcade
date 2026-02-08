@@ -895,7 +895,7 @@ if (player.hotbar && Array.isArray(player.hotbar)) {
     { name: "Solidity Dev", start: { hp: 35, maxhp: 35, atk: 8, def: 4, vision: 12 }, perk: "Audit: +1 vision" },
     { name: "Meme Degenerate", start: { hp: 28, maxhp: 28, atk: 10, def: 2, vision: 10 }, perk: "Pump: +20% XP sometimes" },
     { name: "Rug Survivor", start: { hp: 40, maxhp: 40, atk: 6, def: 5, vision: 11 }, perk: "Dodge: 15% chance avoid damage" },
-    { name: "Whale Apprentice", start: { hp: 32, maxhp: 32, atk: 7, def: 4, vision: 11 }, perk: "Whale: start with 200 Gas" },
+    { name: "Whale Apprentice", start: { hp: 32, maxhp: 32, atk: 7, def: 4, vision: 11 }, perk: "Whale: cheaper gas usage" },
   ];
 
   function chooseClass(idx) {
@@ -913,7 +913,7 @@ attackDir: "down",  // direction of last attack
       atk: cl.start.atk, def: cl.start.def,
       vision: cl.start.vision + (idx === 0 ? 1 : 0),
       lvl: 1, xp: 0, xpNext: 50,
-      gas: (idx === 3) ? 200 : 0,
+      gas: 50,
       rep: 0,
       className: cl.name,
       perk: cl.perk,
