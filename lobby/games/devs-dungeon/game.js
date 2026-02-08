@@ -1811,6 +1811,7 @@ player.stepAt = performance.now();
   let lastActionAt = 0;
 
  function playerTurn() {
+   if (!player) return;   // ✅ prevents null hp crash
   // If menu is open, only allow menu actions + toggles (M / I)
 if (mobileMenuOpen) {
   if (!(keys["save"] || keys["load"] || keys["new"] || keys["n"] || keys["arcade"] || keys["m"] || keys["i"])) {
@@ -2840,21 +2841,25 @@ if (mobileMenuOpen && !invOpen) {
     ].forEach(l => log(l, "#ff9"));
   }
 
-  async function init() {
-    await loadImages(ASSET);
+  let turnTimer = null;
+async function init() {
+  await loadImages(ASSET);
 
-    // don’t auto-open debug overlay on mobile
-    if (!isMobile && GFX.missing.some(m => m.key === "floor" || m.key === "wall" || m.key === "stairsDown")) {
-  setArtDebugVisible(true);
-}
-
-
-    if (!loadGame()) newGame();
-    revealFog();
-    updateUI();
-    render();
+  // don’t auto-open debug overlay on mobile
+  if (!isMobile && GFX.missing.some(m => m.key === "floor" || m.key === "wall" || m.key === "stairsDown")) {
+    setArtDebugVisible(true);
   }
 
-  setInterval(playerTurn, 40);
-  init();
+  if (!loadGame()) newGame();
+
+  revealFog();
+  updateUI();
+  render();
+
+  // ✅ start turns only after player exists
+  if (!turnTimer) turnTimer = setInterval(playerTurn, 40);
+}
+
+init();
 })();
+
