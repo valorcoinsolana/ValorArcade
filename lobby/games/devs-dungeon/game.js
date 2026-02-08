@@ -97,13 +97,109 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
 
 
   let audioCtx = null;
+    // ======================
+  // Gas: tactical + risk meter
+  // ======================
+  const GAS_CFG = {
+    move: 1,      // every successful step
+    attack: 3,    // when you swing at an enemy
+    wait: 1,      // "." wait costs gas too
+    min: 0
+  };
+
+  function clampGas() {
+    player.gas = Math.max(GAS_CFG.min, player.gas | 0);
+  }
+
+  function spendGas(amount, reason = "") {
+    if (!player) return true;
+    player.gas = (player.gas | 0) - (amount | 0);
+    clampGas();
+    return player.gas > 0;
+  }
+
+  function gasTier() {
+    const g = player.gas | 0;
+    // You can tune these thresholds
+    if (g <= 0) return 3;      // empty: critical
+    if (g <= 10) return 2;     // danger
+    if (g <= 25) return 1;     // low
+    return 0;                 // ok
+  }
+
+  function applyLowGasRisk() {
+    const tier = gasTier();
+    if (tier === 0) return;
+
+    // tier 1: low gas -> subtle pressure
+    if (tier === 1) {
+      // small chance to attract attention (more enemies aggro)
+      if (Math.random() < 0.12) {
+        for (const e of entities) {
+          if (e.hp > 0 && dist(e, player) <= 10) e.aggro = true;
+        }
+        log("Low gas… footsteps echo. Something notices you.", "#ff9");
+      }
+      return;
+    }
+
+    // tier 2: danger -> missteps can hurt
+    if (tier === 2) {
+      if (Math.random() < 0.18) {
+        const dmg = 1 + (Math.random() < 0.35 ? 1 : 0);
+        player.hp -= dmg;
+        log(`Gas fumes burn your lungs (-${dmg} HP).`, "#f66");
+        beep(140, 0.06, 0.12, "square");
+        if (player.hp <= 0) {
+          player.hp = 0;
+          gameOver = true;
+          log("You got rugged. GAME OVER.", "#f66");
+          mobileMenuOpen = isMobile;
+        }
+      }
+      return;
+    }
+
+    // tier 3: empty -> constant threat
+    if (tier === 3) {
+      // Every acted turn with 0 gas: small damage + nearby enemies instantly aggro
+      const dmg = 2;
+      player.hp -= dmg;
+      log(`Out of gas! The Abyss drains you (-${dmg} HP).`, "#f66");
+      beep(100, 0.07, 0.14, "square");
+
+      for (const e of entities) {
+        if (e.hp > 0 && dist(e, player) <= 12) e.aggro = true;
+      }
+
+      if (player.hp <= 0) {
+        player.hp = 0;
+        gameOver = true;
+        log("You got rugged. GAME OVER.", "#f66");
+        mobileMenuOpen = isMobile;
+      }
+    }
+  }
 
   // ======================
   // Part 2 - Utility
   // ======================
   const rand = (a, b) => (Math.random() * (b - a + 1) | 0) + a;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function enemyCritChanceFromGas(gas) {
+  // normalize 0..1 where 1 = empty gas, 0 = safe gas
+  const t = clamp((GAS_SAFE - (gas | 0)) / GAS_SAFE, 0, 1);
+  return ENEMY_CRIT_MAX * t;
+}
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  // ======================
+// Gas Danger Meter tuning
+// ======================
+const GAS_SAFE = 120;   // at/above this: 0% crit
+const GAS_EMPTY = 0;    // at/near this: max crit
+const ENEMY_CRIT_MAX = 0.35; // 35% crit chance at 0 gas
+const ENEMY_CRIT_MULT = 1.6; // crit damage multiplier
+
 
   function beep(freq = 440, dur = 0.08, vol = 0.14, type = "sawtooth") {
     try {
@@ -735,8 +831,17 @@ if (!player.stepAt) player.stepAt = 0;
       // --- migrate old inventory/hotbar items to stacks ---
 function normalizeStackEntry(s) {
   if (!s) return s;
+
+  // normalize renamed items
+  if (s.kind === "heal") s.name = "Liquidity Potion";
+  if (s.kind === "gas")  s.name = "Gas";
+  if (s.kind === "atk")  s.name = "New Coin Patch";
+  if (s.kind === "def")  s.name = "KYC Patch";
+  if (s.kind === "xp")   s.name = "Mining Pick-aXP";
+
   if (s.qty == null) s.qty = 1;
   if (s.max == null) s.max = stackMaxForKind(s.kind);
+
   return s;
 }
 
@@ -791,7 +896,7 @@ if (player.hotbar && Array.isArray(player.hotbar)) {
     { name: "Solidity Dev", start: { hp: 35, maxhp: 35, atk: 8, def: 4, vision: 12 }, perk: "Audit: +1 vision" },
     { name: "Meme Degenerate", start: { hp: 28, maxhp: 28, atk: 10, def: 2, vision: 10 }, perk: "Pump: +20% XP sometimes" },
     { name: "Rug Survivor", start: { hp: 40, maxhp: 40, atk: 6, def: 5, vision: 11 }, perk: "Dodge: 15% chance avoid damage" },
-    { name: "Whale Apprentice", start: { hp: 32, maxhp: 32, atk: 7, def: 4, vision: 11 }, perk: "Whale: start with 200 Gas" },
+    { name: "Whale Apprentice", start: { hp: 32, maxhp: 32, atk: 7, def: 4, vision: 11 }, perk: "Whale: cheaper gas usage" },
   ];
 
   function chooseClass(idx) {
@@ -809,7 +914,7 @@ attackDir: "down",  // direction of last attack
       atk: cl.start.atk, def: cl.start.def,
       vision: cl.start.vision + (idx === 0 ? 1 : 0),
       lvl: 1, xp: 0, xpNext: 50,
-      gas: (idx === 3) ? 200 : 0,
+      gas: 50,
       rep: 0,
       className: cl.name,
       perk: cl.perk,
@@ -905,11 +1010,11 @@ attackDir: "down",  // direction of last attack
 
 
   const ITEM_TYPES = [
-    { name:"Health Potion", kind:"heal", amount: 14, ch:"!", color:"#ff6", hotbar:true },
-    { name:"Gas Canister",  kind:"gas",  amount: 60, ch:"$", color:"#0ff", hotbar:true },
-    { name:"Attack Patch",  kind:"atk",  amount: 1,  ch:"+", color:"#f6f", hotbar:false },
-    { name:"Defense Patch", kind:"def",  amount: 1,  ch:"*", color:"#6ff", hotbar:false },
-    { name:"Airdrop XP",    kind:"xp",   amount: 40, ch:"?", color:"#9f9", hotbar:true },
+    { name:"Liquidity Potion", kind:"heal", amount: 14, ch:"!", color:"#ff6", hotbar:true },
+    { name:"Gas",  kind:"gas",  amount: 60, ch:"$", color:"#0ff", hotbar:true },
+    { name:"New Coin Patch",  kind:"atk",  amount: 1,  ch:"+", color:"#f6f", hotbar:false },
+    { name:"KYC Patch", kind:"def",  amount: 1,  ch:"*", color:"#6ff", hotbar:false },
+    { name:"Mining Pick-aXP",    kind:"xp",   amount: 40, ch:"?", color:"#9f9", hotbar:true },
   ];
   // ======================
 // Stacking rules
@@ -1151,7 +1256,12 @@ const scale = 1 + g * 0.05 + g * g * 0.001;
     const r = player.vision;
     for (let y = Math.max(0, player.y - r - 1); y <= Math.min(map.length - 1, player.y + r + 1); y++) {
       for (let x = Math.max(0, player.x - r - 1); x <= Math.min(map[0].length - 1, player.x + r + 1); x++) {
-        if (isVisible(x, y)) explored[y][x] = true;
+        if (isVisible(x, y)) {
+  explored[y][x] = true;
+
+  // ✅ if the stairs are visible, ensure they become explored for minimap marker
+  if (map[y]?.[x] === ">") explored[y][x] = true;
+}
       }
     }
   }
@@ -1185,10 +1295,41 @@ const scale = 1 + g * 0.05 + g * g * 0.001;
   player.attackAt = performance.now();
   player.attackDir = player.facing;
 }
-    const raw = Math.max(1, attacker.atk - target.def + rand(-1, 2));
-    target.hp -= raw;
-    if (attacker === player) { log(`You hit ${target.name} for ${raw}.`, "#ff9"); beep(330, 0.05, 0.10); }
-    else { log(`${attacker.name} hits you for ${raw}.`, "#f66"); beep(160, 0.08, 0.14, "square"); }
+    // Low gas makes you fight worse defensively (risk meter)
+let lowGasPenalty = 0;
+if (target === player) {
+  const tier = gasTier();
+  if (tier === 1) lowGasPenalty = 1;       // low
+  else if (tier === 2) lowGasPenalty = 2;  // danger
+  else if (tier === 3) lowGasPenalty = 3;  // empty
+}
+   let raw = Math.max(1, attacker.atk - target.def + rand(-1, 2));
+
+// Enemy crits scale with LOW gas
+let crit = false;
+if (target === player && attacker !== player) {
+  const pCrit = enemyCritChanceFromGas(player.gas);
+  if (Math.random() < pCrit) {
+    crit = true;
+    raw = Math.max(1, (raw * ENEMY_CRIT_MULT) | 0);
+  }
+}
+
+target.hp -= raw;
+
+if (attacker === player) {
+  log(`You hit ${target.name} for ${raw}.`, "#ff9");
+  beep(330, 0.05, 0.10);
+} else {
+  if (crit) {
+    log(`${attacker.name} CRITS you for ${raw}! (low gas)`, "#ff4");
+    beep(70, 0.10, 0.18, "square");
+  } else {
+    log(`${attacker.name} hits you for ${raw}.`, "#f66");
+    beep(160, 0.08, 0.14, "square");
+  }
+}
+
 
     if (target.hp <= 0) {
       if (target === player) {
@@ -1416,6 +1557,8 @@ function useInventoryItem(index) {
     for (let x = 0; x < map[0].length; x++) {
       if (map[y][x] === ">") {
         explored[y][x] = true;
+        revealFog();     // refresh local visibility edges (optional but feels instant)
+updateUI();      // harmless; keeps UI synced
         log("Meme Lord leaks the stair coords 👀", "#9ff");
         return;
       }
@@ -1534,9 +1677,15 @@ if (n) {
 
 
     const e = getEntityAt(nx, ny);
-    if (e && e.hp > 0) { attack(player, e); return true; }
+if (e && e.hp > 0) {
+  spendGas(GAS_CFG.attack, "attack");
+  attack(player, e);
+  return true;
+}
 
     player.x = nx; player.y = ny;
+    spendGas(GAS_CFG.move, "move");
+
     // walk animation: flip frame on each successful move
 player.step ^= 1;
 player.stepAt = performance.now();
@@ -1750,12 +1899,16 @@ if (invOpen) {
   if (!acted && mv) acted = tryMove(mv.dx, mv.dy);
 
   if (acted) {
-    lastActionAt = now;
-    revealFog();
-    enemyTurn();
-    revealFog();
-    if (Math.random() < 0.06) saveGame();
-  }
+  lastActionAt = now;
+
+  // low gas effects apply on YOUR acted turns
+  applyLowGasRisk();
+
+  revealFog();
+  enemyTurn();
+  revealFog();
+  if (Math.random() < 0.06) saveGame();
+}
 
   updateUI();
 }
@@ -1768,7 +1921,16 @@ if (invOpen) {
     UI.xpNext.textContent = player.xpNext | 0;
     UI.atk.textContent = player.atk | 0;
     UI.def.textContent = player.def | 0;
-    UI.gas.textContent = player.gas | 0;
+    const g = player.gas | 0;
+const pCrit = enemyCritChanceFromGas(g);
+UI.gas.textContent = g;
+
+// tint the GAS text by danger level
+if (UI.gas && UI.gas.style) {
+  if (pCrit >= 0.25) UI.gas.style.color = "#ff4";      // danger
+  else if (pCrit >= 0.12) UI.gas.style.color = "#ff9"; // warning
+  else UI.gas.style.color = "#0ff";                    // safe
+}
     UI.rep.textContent = player.rep | 0;
     UI.floor.textContent = gameLevel | 0;
     UI.inv.textContent = (player.inv.length + player.hotbar.filter(Boolean).length) | 0;
@@ -1943,6 +2105,27 @@ if (invOpen) {
   } else {
     drawText(px + 4, py + 2, "@", "#0f8");
   }
+  // --- Player HP bar ABOVE the sprite ---
+{
+  const w = TS - 4;
+  const hpw = Math.max(0, (w * (player.hp / player.maxhp)) | 0);
+
+  const barH = 5;
+  const barX = px + 2;
+
+  // keep bar inside visible world (don’t overlap top UI)
+  const worldTop = isMobile ? MOBILE_TOP_UI_H : 0;
+  let barY = py - (barH + 5);
+  barY = Math.max(worldTop + 2, barY);
+
+  // background
+  CTX.fillStyle = "rgba(0,0,0,0.6)";
+  CTX.fillRect(barX, barY, w, barH);
+
+  // ✅ green health fill
+  CTX.fillStyle = "rgba(0,255,120,0.9)";
+  CTX.fillRect(barX, barY, hpw, barH);
+}
   // --- Attack slash overlay (code-only) ---
 const atkMs = 110; // duration of slash
 const dt = nowMs - (player.attackAt || 0);
@@ -2063,11 +2246,23 @@ if (isMobile && !deathMenuShown) {
   const sy = mh / map.length;
 
   for (let y = 0; y < map.length; y++) for (let x = 0; x < map[0].length; x++) {
-    if (!explored[y][x]) continue;
-    const ch = map[y][x];
-    CTX.fillStyle = (ch === "#") ? "rgba(0,80,40,0.25)" : "rgba(0,255,120,0.10)";
-    CTX.fillRect(x0 + x * sx, y0 + y * sy, sx + 0.5, sy + 0.5);
+  if (!explored[y][x]) continue;
+
+  const ch = map[y][x];
+
+  // base minimap shading
+  CTX.fillStyle = (ch === "#") ? "rgba(0,80,40,0.25)" : "rgba(0,255,120,0.10)";
+  CTX.fillRect(x0 + x * sx, y0 + y * sy, sx + 0.5, sy + 0.5);
+
+  // ✅ stairs marker (white square) once explored (by talk OR by walking nearby)
+  if (ch === ">") {
+    CTX.fillStyle = "rgba(255,255,255,0.95)";
+    // make it a bit chunkier than a single pixel
+    const px = x0 + x * sx;
+    const py = y0 + y * sy;
+    CTX.fillRect(px, py, Math.max(2, sx + 0.5), Math.max(2, sy + 0.5));
   }
+}
 
   CTX.fillStyle = "rgba(0,255,180,0.9)";
   CTX.fillRect(x0 + player.x * sx - 1, y0 + player.y * sy - 1, 3, 3);
