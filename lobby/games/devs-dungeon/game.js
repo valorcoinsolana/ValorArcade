@@ -816,10 +816,20 @@ if (!player.stepAt) player.stepAt = 0;
       // --- migrate old inventory/hotbar items to stacks ---
 function normalizeStackEntry(s) {
   if (!s) return s;
+
+  // normalize renamed items
+  if (s.kind === "heal") s.name = "Liquidity Potion";
+  if (s.kind === "gas")  s.name = "Gas";
+  if (s.kind === "atk")  s.name = "New Coin Patch";
+  if (s.kind === "def")  s.name = "KYC Patch";
+  if (s.kind === "xp")   s.name = "Mining Pick-aXP";
+
   if (s.qty == null) s.qty = 1;
   if (s.max == null) s.max = stackMaxForKind(s.kind);
+
   return s;
 }
+
 
 if (player.inv && Array.isArray(player.inv)) {
   player.inv = player.inv.map(normalizeStackEntry);
