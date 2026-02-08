@@ -86,6 +86,7 @@ let desktopMenuRects = null;
   let mobileMenuOpen = false;
   let hotbarRects = []; // [{slot,x,y,w,h}]
   let invOpen = false;
+  let logOpen = false;
 let invScroll = 0;
   // which inventory row is selected (0-based within the FULL inv array)
 let invIndex = 0;
@@ -130,15 +131,17 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
 
   function log(msg, color = "#ccc") {
   messages.push({ t: msg, c: color });
-  if (messages.length > 10) messages.shift();
 
-  UI.log.innerHTML = messages
-    .map(x => `<div style="color:${x.c}">${escapeHtml(x.t)}</div>`)
-    .join("");
+  // keep a longer history for the menu log
+  if (messages.length > 100) messages.shift();
 
-  // ✅ auto-scroll to newest message
-  UI.log.scrollTop = UI.log.scrollHeight;
+  // HUD shows ONLY the most recent message
+  if (UI.log) {
+    UI.log.innerHTML =
+      `<div style="color:${color}">${escapeHtml(msg)}</div>`;
+  }
 }
+
 
 
   // ======================
@@ -1679,10 +1682,18 @@ if (invOpen) {
   if (keys["i"]) {
   keys["i"] = false;
   invOpen = !invOpen;
-
-  // ✅ prevent menu overlapping inventory
-  if (invOpen) mobileMenuOpen = false;
+  if (invOpen) {
+    mobileMenuOpen = false;
+    logOpen = false;
+  }
 }
+   if (keys["log"]) {
+  keys["log"] = false;
+  logOpen = !logOpen;
+  mobileMenuOpen = false;
+}
+
+
 
 
   if (invOpen) {
@@ -1932,6 +1943,8 @@ if (!isMobile) drawDesktopHotbar();
 
     // Inventory overlay
     if (invOpen) drawInventoryOverlay();
+    if (logOpen) drawLogOverlay();
+
 
     // Mobile controls (dpad/hotbar/buttons/menu overlay)
     if (isMobile) drawMobileControls();
@@ -2239,6 +2252,42 @@ if (isMobile && !deathMenuShown) {
   CTX.textAlign = "left";
   CTX.textBaseline = "top";
 }
+  function drawLogOverlay() {
+  const pad = 18;
+  const w = Math.min(640, W - pad * 2);
+  const h = Math.min(420, H - pad * 2 - (isMobile ? MOBILE_UI_H : 0));
+
+  const x = (W - w) / 2;
+  const y = (isMobile ? MOBILE_TOP_UI_H + 12 : 16);
+
+  CTX.fillStyle = "rgba(0,0,0,0.85)";
+  CTX.fillRect(x, y, w, h);
+  CTX.strokeStyle = "rgba(0,255,120,0.25)";
+  CTX.strokeRect(x, y, w, h);
+
+  CTX.font = `bold 18px "Courier New", monospace`;
+  CTX.fillStyle = "rgba(0,255,180,0.9)";
+  CTX.fillText("LOG", x + 14, y + 12);
+
+  const listY = y + 44;
+  const lineH = 18;
+  const maxLines = ((h - 60) / lineH) | 0;
+
+  const start = Math.max(0, messages.length - maxLines);
+  const visible = messages.slice(start);
+
+  CTX.font = `14px "Courier New", monospace`;
+  for (let i = 0; i < visible.length; i++) {
+    const m = visible[i];
+    CTX.fillStyle = m.c || "#ccc";
+    CTX.fillText(m.t, x + 14, listY + i * lineH);
+  }
+
+  // Close hint
+  CTX.fillStyle = "rgba(0,255,160,0.7)";
+  CTX.fillText(isMobile ? "Tap MENU to close" : "Press M to close", x + 14, y + h - 16);
+}
+
 
 function drawDesktopMenuUI() {
   // Small top-right MENU button
@@ -2270,6 +2319,7 @@ function drawDesktopMenuUI() {
     { k:"save",   t:"SAVE" },
     { k:"load",   t:"LOAD" },
     { k:"new",    t:"NEW"  },
+    { k:"log",    t:"LOG"  },
     { k:"i",      t:"INVENTORY" },
     { k:"n",      t:"RESTART" },
     { k:"arcade", t:"ARCADE" },
@@ -2428,6 +2478,7 @@ if (mobileMenuOpen && !invOpen) {
     { k:"save",   t:"SAVE" },
     { k:"load",   t:"LOAD" },
     { k:"new",    t:"NEW"  },
+    { k:"log",    t:"LOG"  },
     { k:"i",      t:"INVENTORY" },
     { k:"arcade", t:"ARCADE" },
   ];
