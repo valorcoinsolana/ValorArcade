@@ -184,7 +184,20 @@ let invPageLines = 8;      // updated each frame from drawInventoryOverlay
   // ======================
   const rand = (a, b) => (Math.random() * (b - a + 1) | 0) + a;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function enemyCritChanceFromGas(gas) {
+  // normalize 0..1 where 1 = empty gas, 0 = safe gas
+  const t = clamp((GAS_SAFE - (gas | 0)) / GAS_SAFE, 0, 1);
+  return ENEMY_CRIT_MAX * t;
+}
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  // ======================
+// Gas Danger Meter tuning
+// ======================
+const GAS_SAFE = 120;   // at/above this: 0% crit
+const GAS_EMPTY = 0;    // at/near this: max crit
+const ENEMY_CRIT_MAX = 0.35; // 35% crit chance at 0 gas
+const ENEMY_CRIT_MULT = 1.6; // crit damage multiplier
+
 
   function beep(freq = 440, dur = 0.08, vol = 0.14, type = "sawtooth") {
     try {
@@ -1290,10 +1303,33 @@ if (target === player) {
   else if (tier === 2) lowGasPenalty = 2;  // danger
   else if (tier === 3) lowGasPenalty = 3;  // empty
 }
-    const raw = Math.max(1, attacker.atk - (target.def - lowGasPenalty) + rand(-1, 2));
-    target.hp -= raw;
-    if (attacker === player) { log(`You hit ${target.name} for ${raw}.`, "#ff9"); beep(330, 0.05, 0.10); }
-    else { log(`${attacker.name} hits you for ${raw}.`, "#f66"); beep(160, 0.08, 0.14, "square"); }
+    let raw = Math.max(1, attacker.atk - target.def + rand(-1, 2));
+
+// Enemy crits scale with LOW gas
+let crit = false;
+if (target === player && attacker !== player) {
+  const pCrit = enemyCritChanceFromGas(player.gas);
+  if (Math.random() < pCrit) {
+    crit = true;
+    raw = Math.max(1, (raw * ENEMY_CRIT_MULT) | 0);
+  }
+}
+
+target.hp -= raw;
+
+if (attacker === player) {
+  log(`You hit ${target.name} for ${raw}.`, "#ff9");
+  beep(330, 0.05, 0.10);
+} else {
+  if (crit) {
+    log(`${attacker.name} CRITS you for ${raw}! (low gas)`, "#ff4");
+    beep(70, 0.10, 0.18, "square");
+  } else {
+    log(`${attacker.name} hits you for ${raw}.`, "#f66");
+    beep(160, 0.08, 0.14, "square");
+  }
+}
+
 
     if (target.hp <= 0) {
       if (target === player) {
@@ -1887,7 +1923,17 @@ if (keys["."]) {
     UI.xpNext.textContent = player.xpNext | 0;
     UI.atk.textContent = player.atk | 0;
     UI.def.textContent = player.def | 0;
-    UI.gas.textContent = player.gas | 0;
+    const g = player.gas | 0;
+const pCrit = enemyCritChanceFromGas(g);
+UI.gas.textContent = g;
+
+// tint the GAS text by danger level
+if (UI.gas && UI.gas.style) {
+  if (pCrit >= 0.25) UI.gas.style.color = "#ff4";      // danger
+  else if (pCrit >= 0.12) UI.gas.style.color = "#ff9"; // warning
+  else UI.gas.style.color = "#0ff";                    // safe
+}
+
     UI.rep.textContent = player.rep | 0;
     UI.floor.textContent = gameLevel | 0;
     UI.inv.textContent = (player.inv.length + player.hotbar.filter(Boolean).length) | 0;
