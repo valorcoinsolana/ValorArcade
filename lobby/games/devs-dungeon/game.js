@@ -744,23 +744,68 @@ stepAt: 0,          // timestamp of last step toggle
   }
 
   const ENEMY_TYPES = [
-  // tier 0 (floors 1–4)
-  { name:"FUD Imp",     ch:"f", hp:10, atk:4, def:1, xp:14, color:"#f96", tier:0 },
-  { name:"Bot Swarm",   ch:"b", hp:9,  atk:3, def:0, xp:10, color:"#9cf", tier:0 },
+  // ───────── Tier 0 (Floors 1–4)
+  { name:"FUD Imp",       ch:"f", hp:10, atk:4, def:1, xp:14, color:"#f96", tier:0 },
+  { name:"Bot Swarm",     ch:"b", hp:9,  atk:3, def:0, xp:10, color:"#9cf", tier:0 },
 
-  // tier 1 (floor 5)
-  { name:"Rug Gremlin", ch:"r", hp:14, atk:5, def:2, xp:20, color:"#f66", tier:1 },
+  // ───────── Tier 1 (Floor 5)
+  { name:"Rug Gremlin",   ch:"r", hp:14, atk:5, def:2, xp:20, color:"#f66", tier:1 },
 
-  // tier 2 (floor 10)
-  { name:"Pump Fiend",  ch:"p", hp:12, atk:6, def:1, xp:22, color:"#6f6", tier:2 },
+  // ───────── Tier 2 (Floor 10)
+  { name:"Pump Fiend",    ch:"p", hp:12, atk:6, def:1, xp:22, color:"#6f6", tier:2 },
 
-  // tier 3 (floor 15)
-  { name:"Whale Shade", ch:"w", hp:18, atk:7, def:3, xp:34, color:"#6ff", tier:3 },
+  // ───────── Tier 3 (Floor 15)
+  { name:"Whale Shade",   ch:"w", hp:18, atk:7, def:3, xp:34, color:"#6ff", tier:3 },
 
-  // ⬇️ keep adding one every 5 floors
-  // tier 4 → floor 20
-  // tier 5 → floor 25
+  // ───────── Tier 4 (Floor 20)
+  { name:"Gas Guzzler",   ch:"g", hp:20, atk:6, def:4, xp:38, color:"#0ff", tier:4 },
+
+  // ───────── Tier 5 (Floor 25)
+  { name:"Liquidity Leech", ch:"l", hp:16, atk:8, def:2, xp:42, color:"#9f6", tier:5 },
+
+  // ───────── Tier 6 (Floor 30)
+  { name:"Oracle Wraith", ch:"o", hp:22, atk:9, def:3, xp:48, color:"#c9f", tier:6 },
+
+  // ───────── Tier 7 (Floor 35)
+  { name:"Slippage Horror", ch:"s", hp:24, atk:10, def:2, xp:54, color:"#ff9", tier:7 },
+
+  // ───────── Tier 8 (Floor 40)
+  { name:"MEV Sniper",    ch:"m", hp:18, atk:12, def:3, xp:58, color:"#f9f", tier:8 },
+
+  // ───────── Tier 9 (Floor 45)
+  { name:"Dust Hoarder",  ch:"d", hp:28, atk:8, def:5, xp:62, color:"#ccc", tier:9 },
+
+  // ───────── Tier 10 (Floor 50)
+  { name:"Bridge Troll",  ch:"t", hp:30, atk:11, def:5, xp:70, color:"#fa6", tier:10 },
+
+  // ───────── Tier 11 (Floor 55)
+  { name:"Governance Ghoul", ch:"h", hp:26, atk:13, def:4, xp:74, color:"#6fc", tier:11 },
+
+  // ───────── Tier 12 (Floor 60)
+  { name:"Forked Abomination", ch:"k", hp:34, atk:12, def:6, xp:80, color:"#f66", tier:12 },
+
+  // ───────── Tier 13 (Floor 65)
+  { name:"Validator Revenant", ch:"v", hp:32, atk:14, def:6, xp:86, color:"#9cf", tier:13 },
+
+  // ───────── Tier 14 (Floor 70)
+  { name:"Zero-Knowledge Stalker", ch:"z", hp:28, atk:16, def:5, xp:92, color:"#bff", tier:14 },
+
+  // ───────── Tier 15 (Floor 75)
+  { name:"Flash Loan Lich", ch:"x", hp:36, atk:17, def:6, xp:100, color:"#c6f", tier:15 },
+
+  // ───────── Tier 16 (Floor 80)
+  { name:"Consensus Breaker", ch:"c", hp:40, atk:16, def:8, xp:110, color:"#ff6", tier:16 },
+
+  // ───────── Tier 17 (Floor 85)
+  { name:"Finality Phantom", ch:"y", hp:38, atk:18, def:7, xp:120, color:"#6ff", tier:17 },
+
+  // ───────── Tier 18 (Floor 90)
+  { name:"Black Swan Entity", ch:"q", hp:44, atk:20, def:8, xp:140, color:"#999", tier:18 },
+
+  // ───────── Tier 19 (Floor 95–100)
+  { name:"Genesis Parasite", ch:"G", hp:52, atk:22, def:10, xp:180, color:"#fff", tier:19 },
 ];
+
 
   function pickEnemyTypeByFloor(floor) {
   // which tiers are unlocked?
