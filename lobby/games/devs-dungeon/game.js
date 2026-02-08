@@ -877,10 +877,29 @@ function sameStack(a, b) {
 
 
   const NPC_TYPES = [
-    { name:"Meme Lord",  ch:"M", color:"#ff9", lines:["GM. Your bags are heavy.","Diamond hands or NGMI.","I sold the top (I didn't)."]},
-    { name:"Bagholder",  ch:"B", color:"#ccc", lines:["It's not a loss if I don't sell.","My portfolio is a museum.","I trust the dev (I am the dev)."]},
-    { name:"Ape Priest", ch:"A", color:"#9ff", lines:["Ape together strong.","Buy high, sell... never.","WAGMI, but pay the gas."]},
-  ];
+  {
+    name:"Meme Lord",
+    ch:"M",
+    color:"#ff9",
+    role:"lore",
+    lines:[...]
+  },
+  {
+    name:"Bagholder",
+    ch:"B",
+    color:"#ccc",
+    role:"trader",
+    lines:[...]
+  },
+  {
+    name:"Ape Priest",
+    ch:"A",
+    color:"#9ff",
+    role:"buffer",
+    lines:[...]
+  },
+];
+
 
   const FLOOR_NAMES = ["Meme Hell","Pump Chasm","Rug Depths","FUD Abyss","WAGMI Vault"];
 
@@ -989,6 +1008,7 @@ function sameStack(a, b) {
     }
 
     spawnContent();
+    for (const n of npcs) n.usedThisFloor = false;
 
     const nm = FLOOR_NAMES[(gameLevel - 1) % FLOOR_NAMES.length];
     log(`Floor ${gameLevel}: ${nm} — gas fees rising…`, "#f96");
@@ -1313,7 +1333,91 @@ function useInventoryItem(index) {
     player.rep += rand(-1, 2);
     if (Math.random() < 0.25) player.gas += rand(1, 8);
     beep(520, 0.04, 0.10, "triangle");
+    handleNPCRole(n);
   }
+  function handleNPCRole(n) {
+  if (!n || !n.role) return;
+
+  // prevent abuse: once per floor per NPC
+  if (n.usedThisFloor) {
+    log(`${n.name} has nothing more to offer.`, "#aaa");
+    return;
+  }
+
+  n.usedThisFloor = true;
+
+  switch (n.role) {
+    case "lore":
+      revealRandomMapHint();
+      break;
+
+    case "trader":
+      npcTrade(n);
+      break;
+
+    case "buffer":
+      npcBlessing(n);
+      break;
+  }
+}
+function revealRandomMapHint() {
+  const options = [];
+
+  // reveal stairs location
+  options.push(() => {
+    for (let y = 0; y < map.length; y++)
+      for (let x = 0; x < map[0].length; x++)
+        if (map[y][x] === ">") explored[y][x] = true;
+    log("You glimpse the path to the stairs.", "#9ff");
+  });
+
+  // reveal nearby unexplored area
+  options.push(() => {
+    const r = 6;
+    for (let y = player.y - r; y <= player.y + r; y++)
+      for (let x = player.x - r; x <= player.x + r; x++)
+        if (map[y]?.[x] === ".") explored[y][x] = true;
+    log("Hidden paths fade into view.", "#9ff");
+  });
+
+  options[rand(0, options.length - 1)]();
+}
+function npcTrade(n) {
+  const cost = 25 + gameLevel * 3;
+  if (player.gas < cost) {
+    log("Not enough gas to trade.", "#f96");
+    return;
+  }
+
+  player.gas -= cost;
+
+  const t = ITEM_TYPES[rand(0, ITEM_TYPES.length - 1)];
+  items.push({
+    x: n.x,
+    y: n.y,
+    ...t,
+    animPhase: (n.x * 5 + n.y * 11) | 0
+  });
+
+  log(`Trade complete. ${t.name} dropped.`, "#0ff");
+}
+function npcBlessing(n) {
+  const roll = Math.random();
+
+  if (roll < 0.4) {
+    player.atk += 1;
+    log("You feel stronger. (+1 ATK)", "#9f9");
+  } else if (roll < 0.7) {
+    player.def += 1;
+    log("Your resolve hardens. (+1 DEF)", "#9f9");
+  } else {
+    player.vision += 1;
+    log("Your sight expands. (+1 VISION)", "#9f9");
+  }
+
+  beep(880, 0.06, 0.12, "triangle");
+}
+
   function tryNudgeNPC(n) {
   if (!n) return false;
 
