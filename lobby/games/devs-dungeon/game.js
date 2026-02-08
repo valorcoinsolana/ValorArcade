@@ -7,6 +7,8 @@
   // ======================
   const C = document.getElementById("c");
   const CTX = C.getContext("2d", { alpha: false });
+  CTX.imageSmoothingEnabled = false;
+
 
   const UI = {
     hp: document.getElementById("hp"),
@@ -1767,6 +1769,9 @@ if (invOpen) {
     // Minimap (needs desktopMenuButtonRect to be set first)
     drawMinimap();
 
+    // Desktop hotbar
+if (!isMobile) drawDesktopHotbar();
+
     // Inventory overlay
     if (invOpen) drawInventoryOverlay();
 
@@ -1843,6 +1848,74 @@ if (isMobile && !deathMenuShown) {
   CTX.fillStyle = "rgba(0,255,180,0.9)";
   CTX.fillRect(x0 + player.x * sx - 1, y0 + player.y * sy - 1, 3, 3);
 }
+  function drawDesktopHotbar() {
+  if (!player || !player.hotbar) return;
+
+  const slots = 5;
+  const size = clamp((TS * 1.1) | 0, 44, 64);
+  const gap = 12;
+
+  const totalW = slots * size + (slots - 1) * gap;
+  const x0 = (W - totalW) / 2;
+  const y0 = H - size - 18;
+
+  CTX.font = `bold 14px "Courier New", monospace`;
+  CTX.textAlign = "center";
+  CTX.textBaseline = "middle";
+
+  for (let i = 0; i < slots; i++) {
+    const x = x0 + i * (size + gap);
+    const y = y0;
+
+    // slot background
+    CTX.fillStyle = "rgba(0,255,120,0.07)";
+    CTX.fillRect(x, y, size, size);
+    CTX.strokeStyle = "rgba(0,255,120,0.22)";
+    CTX.strokeRect(x, y, size, size);
+
+    const it = player.hotbar[i];
+
+    if (it) {
+      // draw icon
+      const frames = itemFrames(it.ch);
+      const im = (frames && frames[0]) || firstAvailableFrame(frames);
+
+      if (im) {
+        const pad = 6;
+        const s = size - pad * 2;
+        CTX.drawImage(im, 0, 0, SPRITE_SRC, SPRITE_SRC, x + pad, y + pad, s, s);
+      }
+
+      // qty badge
+      const q = (it.qty ?? 1) | 0;
+      if (q > 1) {
+        CTX.save();
+        CTX.textAlign = "right";
+        CTX.textBaseline = "bottom";
+        CTX.font = `bold ${Math.max(12, (size * 0.32) | 0)}px "Courier New", monospace`;
+
+        CTX.fillStyle = "rgba(0,0,0,0.55)";
+        const tx = x + size - 4;
+        const ty = y + size - 3;
+        const bw = Math.max(14, (String(q).length * 8) + 10);
+        const bh = 16;
+        CTX.fillRect(tx - bw, ty - bh, bw, bh);
+
+        CTX.fillStyle = "rgba(0,255,200,0.95)";
+        CTX.fillText(String(q), tx, ty);
+        CTX.restore();
+      }
+    } else {
+      // empty slot → show number
+      CTX.fillStyle = "rgba(0,255,180,0.75)";
+      CTX.fillText(String(i + 1), x + size / 2, y + size / 2);
+    }
+  }
+
+  CTX.textAlign = "left";
+  CTX.textBaseline = "top";
+}
+
 
 
   function drawInventoryOverlay() {
