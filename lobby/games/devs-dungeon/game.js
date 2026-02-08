@@ -1,12 +1,28 @@
 (() => {
   "use strict";
+  window.addEventListener("error", (e) => {
+  try {
+    const c = document.getElementById("c");
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = "#f55";
+    ctx.font = '16px monospace';
+    ctx.fillText("JS ERROR:", 20, 30);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(e.message || e.error), 20, 55);
+    console.error(e.error || e.message);
+  } catch {}
+});
    window.__mobileMenuRects = null;
 
   // ======================
   // Part 0 - DOM + Canvas
   // ======================
   const C = document.getElementById("c");
-  const CTX = C.getContext("2d", { alpha: false });
+if (!C) throw new Error('Canvas #c not found');
+const CTX = C.getContext("2d", { alpha: false });
   CTX.imageSmoothingEnabled = false;
 
 
@@ -529,13 +545,42 @@ for (let i = buttons.length - 1; i >= 0; i--) {
 const hotbarY = bottomTop + 12;
 
 for (let i = 0; i < slots; i++) {
-  hotbarRects.push({
-    slot: i,
-    x: startX + i * (size + hotPad),
-    y: hotbarY,
-    w: size,
-    h: size
-  });
+    // ----------------------
+  // 2) Hotbar: shift right to avoid D-pad AND shrink if needed
+  // ----------------------
+  hotbarRects = [];
+  const slots = 5;
+  const hotPad = 10;
+
+  // D-pad right edge + padding = "do not start before this"
+  const dpadRightEdge = dpad.cx + dpad.size * 0.5;
+  const minX = isMobile ? (dpadRightEdge + 22) : 14;
+  const maxX = W - 14;
+
+  // available width for hotbar after avoiding D-pad
+  const availW = Math.max(120, maxX - minX);
+
+  let size = Math.floor((availW - (slots - 1) * hotPad) / slots);
+  size = clamp(size, 40, 56);
+
+  const totalW = slots * size + (slots - 1) * hotPad;
+
+  // ✅ center hotbar within available space (but never before minX)
+  const startX = minX + Math.max(0, ((availW - totalW) / 2) | 0);
+
+  // hotbar sits near the TOP of the bottom UI zone
+  const hotbarY = (H - MOBILE_UI_H) + 12;
+
+  for (let i = 0; i < slots; i++) {
+    hotbarRects.push({
+      slot: i,
+      x: startX + i * (size + hotPad),
+      y: hotbarY,
+      w: size,
+      h: size
+    });
+  }
+
 }
 }
 
