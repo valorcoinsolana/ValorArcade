@@ -1196,7 +1196,7 @@ function sameStack(a, b) {
 
   function spawnContent() {
     const enemyCount = clamp(6 + gameLevel * 2, 8, 40);
-    const itemCount  = clamp(5 + (gameLevel / 2 | 0), 6, 18);
+    const itemCount  = clamp(3 + (gameLevel / 4 | 0), 2, 10);
     const npcCount   = clamp((gameLevel % 3 === 0) ? 1 : 0, 0, 2);
 
     for (let i = 0; i < enemyCount; i++) {
