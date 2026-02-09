@@ -1557,6 +1557,41 @@ for (let i = 0; i < normalCount; i++) {
       npcs.push({ ...p, ...t, animPhase });
     }
   }
+  function stairsLocked() {
+  // Lock stairs if ANY boss/miniboss is alive on this floor
+  return entities.some(e => e && e.hp > 0 && (e.kind === "boss" || e.kind === "miniboss"));
+}
+  function drawStairsLockOverlay(px, py) {
+  // px/py are top-left of the tile (screen coords)
+  CTX.save();
+
+  // dark tint
+  CTX.fillStyle = "rgba(0,0,0,0.35)";
+  CTX.fillRect(px, py, TS, TS);
+
+  // red X
+  CTX.strokeStyle = "rgba(255, 60, 60, 0.95)";
+  CTX.lineWidth = Math.max(2, (TS * 0.12) | 0);
+  CTX.lineCap = "round";
+
+  const pad = Math.max(4, (TS * 0.22) | 0);
+  CTX.beginPath();
+  CTX.moveTo(px + pad, py + pad);
+  CTX.lineTo(px + TS - pad, py + TS - pad);
+  CTX.moveTo(px + TS - pad, py + pad);
+  CTX.lineTo(px + pad, py + TS - pad);
+  CTX.stroke();
+
+  // tiny "LOCK" label (optional but nice)
+  CTX.font = `bold ${Math.max(10, (TS * 0.32) | 0)}px "Courier New", monospace`;
+  CTX.textAlign = "center";
+  CTX.textBaseline = "middle";
+  CTX.fillStyle = "rgba(255, 220, 90, 0.95)";
+  CTX.fillText("LOCK", px + TS / 2, py + TS / 2);
+
+  CTX.restore();
+}
+
 
   // ======================
   // Part 8 - Gameplay
@@ -2028,20 +2063,27 @@ player.stepAt = performance.now();
     if (it) pickupItem(it);
 
     if (map[ny][nx] === ">") {
-      if (gameLevel >= 100) {
-        win = true;
-        meta.wins = (meta.wins || 0) + 1;
-        log("GENESIS BLOCK FOUND. You escaped with an immutable Lambo.", "#0ff");
-        beep(1040, 0.20, 0.14);
-      } else {
-        gameLevel++;
-        meta.highFloor = Math.max(meta.highFloor || 0, gameLevel);
-        log(`Descending... Floor ${gameLevel}`, "#f96");
-        beep(520, 0.08, 0.12);
-        generateFloor();
-      }
-      return true;
-    }
+  // ✅ Lock stairs on boss/miniboss floors until defeated
+  if (stairsLocked()) {
+    log("The stairs are sealed. Defeat the boss to unlock them.", "#ff4");
+    beep(120, 0.08, 0.16, "square");
+    return true; // counts as a turn (you stepped onto the stairs tile)
+  }
+
+  if (gameLevel >= 100) {
+    win = true;
+    meta.wins = (meta.wins || 0) + 1;
+    log("GENESIS BLOCK FOUND. You escaped with an immutable Lambo.", "#0ff");
+    beep(1040, 0.20, 0.14);
+  } else {
+    gameLevel++;
+    meta.highFloor = Math.max(meta.highFloor || 0, gameLevel);
+    log(`Descending... Floor ${gameLevel}`, "#f96");
+    beep(520, 0.08, 0.12);
+    generateFloor();
+  }
+  return true;
+}
     return true;
   }
 
@@ -2372,12 +2414,21 @@ if (UI.gas && UI.gas.style) {
       CTX.fillRect(px, py, TS, TS);
 
       if (vis) {
-        const frames = tileFrames(ch);
-        const phase = (x * 3 + y * 5) & 7;
-        if (!drawSpriteFrames(frames, px, py, 1, nowMs, ANIM.tilesMs, phase) && ch === ">") {
-          drawText(px + 4, py + 2, ">", "#ff9");
-        }
-      }
+  const frames = tileFrames(ch);
+  const phase = (x * 3 + y * 5) & 7;
+
+  const drew = drawSpriteFrames(frames, px, py, 1, nowMs, ANIM.tilesMs, phase);
+
+  // fallback if stairs art missing
+  if (!drew && ch === ">") {
+    drawText(px + 4, py + 2, ">", "#ff9");
+  }
+
+  // ✅ lock indicator overlay on stairs when boss/miniboss alive
+  if (ch === ">" && stairsLocked()) {
+    drawStairsLockOverlay(px, py);
+  }
+}
     }
 
     // --- Boss / Mini-boss footprint glow (drawn on floor) ---
