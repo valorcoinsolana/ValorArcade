@@ -966,7 +966,7 @@ if (player.hotbar && Array.isArray(player.hotbar)) {
       vision: cl.start.vision + (idx === 0 ? 1 : 0),
       lvl: 1, xp: 0, xpNext: 50,
       levelUpAt: 0,
-      gas: 50,
+      gas: 100,
       rep: 0,
       className: cl.name,
       perk: cl.perk,
