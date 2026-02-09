@@ -1352,6 +1352,49 @@ function footprintFitsAt(cx, cy, size) {
   }
   return true;
 }
+  function footprintBounds(e) {
+  const s = entityFootprint(e);
+  const half = Math.floor(s / 2);
+  const left = e.x - half;
+  const top  = e.y - half;
+  const right = left + s - 1;
+  const bottom = top + s - 1;
+  return { left, top, right, bottom, s };
+}
+
+// Manhattan distance from point (px,py) to the *nearest tile* in e's footprint
+function distToFootprintManhattan(e, px, py) {
+  const b = footprintBounds(e);
+  // clamp point to footprint rectangle
+  const cx = clamp(px, b.left, b.right);
+  const cy = clamp(py, b.top,  b.bottom);
+  return Math.abs(px - cx) + Math.abs(py - cy);
+}
+
+// Same as footprintFitsAt but ALSO ensures you won't overlap other entities footprints.
+// `self` is the moving entity (so it doesn't self-block)
+function footprintFitsAtEntity(cx, cy, size, self) {
+  const half = Math.floor(size / 2);
+  const left = cx - half, top = cy - half;
+  const right = left + size - 1, bottom = top + size - 1;
+
+  for (let y = top; y <= bottom; y++) {
+    for (let x = left; x <= right; x++) {
+      if (isWall(x, y)) return false;
+      if (map[y]?.[x] !== ".") return false;
+      if (getNPCAt(x, y) || getItemAt(x, y)) return false;
+
+      // block if any OTHER entity footprint occupies this tile
+      const blocker = entities.find(en => en !== self && entityBlocksTile(en, x, y) && en.hp > 0);
+      if (blocker) return false;
+
+      // don't step onto player
+      if (x === player.x && y === player.y) return false;
+    }
+  }
+  return true;
+}
+
 
   function getEntityAt(x, y) {
   return getBlockingEntityAt(x, y);
@@ -1978,41 +2021,81 @@ player.stepAt = performance.now();
   }
 
   function enemyTurn() {
-    for (const e of entities) {
-      if (e.hp <= 0) continue;
+  for (const e of entities) {
+    if (e.hp <= 0) continue;
 
-      const canSee = dist(e, player) <= 9 && lineOfSight(e.x, e.y, player.x, player.y);
-      if (canSee) e.aggro = true;
+    const size = entityFootprint(e);
 
-      let dx = 0, dy = 0;
+    // Can see player? (use center LOS, good enough)
+    const canSee = dist(e, player) <= 9 && lineOfSight(e.x, e.y, player.x, player.y);
+    if (canSee) e.aggro = true;
 
-      if (e.aggro) {
-        const sx = Math.sign(player.x - e.x);
-        const sy = Math.sign(player.y - e.y);
-        const md = Math.abs(player.x - e.x) + Math.abs(player.y - e.y);
-        if (md === 1) { attack(e, player); continue; }
+    // ✅ ATTACK if player is adjacent to ANY tile in the footprint
+    const mdFoot = distToFootprintManhattan(e, player.x, player.y);
+    if (e.aggro && mdFoot === 1) {
+      attack(e, player);
+      continue;
+    }
 
-        if (Math.abs(player.x - e.x) > Math.abs(player.y - e.y)) {
-          dx = sx;
-          if (isWall(e.x + dx, e.y) || getEntityAt(e.x + dx, e.y) || getNPCAt(e.x + dx, e.y)) { dx = 0; dy = sy; }
-        } else {
-          dy = sy;
-          if (isWall(e.x, e.y + dy) || getEntityAt(e.x, e.y + dy) || getNPCAt(e.x, e.y + dy)) { dx = sx; dy = 0; }
-        }
+    let dx = 0, dy = 0;
+
+    if (e.aggro) {
+      const sx = Math.sign(player.x - e.x);
+      const sy = Math.sign(player.y - e.y);
+
+      // Prefer axis with bigger gap (same as before)
+      if (Math.abs(player.x - e.x) > Math.abs(player.y - e.y)) {
+        dx = sx;
       } else {
-        if (Math.random() < 0.25) {
-          dx = rand(-1, 1);
-          dy = (dx === 0) ? rand(-1, 1) : 0;
-        } else continue;
+        dy = sy;
+      }
+    } else {
+      if (Math.random() < 0.25) {
+        dx = rand(-1, 1);
+        dy = (dx === 0) ? rand(-1, 1) : 0;
+      } else continue;
+    }
+
+    const nx = e.x + dx, ny = e.y + dy;
+
+    // ✅ MOVEMENT: footprint must fit at destination
+    if (size > 1) {
+      // if the preferred move doesn't fit, try the other axis
+      if (!footprintFitsAtEntity(nx, ny, size, e)) {
+        const altX = e.x + Math.sign(player.x - e.x);
+        const altY = e.y + Math.sign(player.y - e.y);
+
+        // Try swapping axis
+        if (dx !== 0) { // we tried x, try y
+          if (footprintFitsAtEntity(e.x, altY, size, e)) { e.y = altY; continue; }
+        } else {        // we tried y, try x
+          if (footprintFitsAtEntity(altX, e.x === e.x ? e.y : e.y, size, e)) { e.x = altX; continue; }
+          // (line above is awkward; do it cleanly:)
+        }
+
+        // Clean alt attempts:
+        if (dx !== 0) {
+          if (footprintFitsAtEntity(e.x, altY, size, e)) { e.y = altY; continue; }
+        } else {
+          if (footprintFitsAtEntity(altX, e.y, size, e)) { e.x = altX; continue; }
+        }
+
+        // No fit -> don't move
+        continue;
       }
 
-      const nx = e.x + dx, ny = e.y + dy;
-      if (nx === player.x && ny === player.y) { attack(e, player); continue; }
-      if (!isWall(nx, ny) && !getEntityAt(nx, ny) && !getNPCAt(nx, ny) && map[ny][nx] !== ">") {
-        e.x = nx; e.y = ny;
-      }
+      // Fits -> move center
+      e.x = nx; e.y = ny;
+      continue;
+    }
+
+    // ---- Normal 1×1 enemies keep old rules ----
+    if (nx === player.x && ny === player.y) { attack(e, player); continue; }
+    if (!isWall(nx, ny) && !getEntityAt(nx, ny) && !getNPCAt(nx, ny) && map[ny][nx] !== ">") {
+      e.x = nx; e.y = ny;
     }
   }
+}
 
   // ======================
   // Part 9 - Turn loop
