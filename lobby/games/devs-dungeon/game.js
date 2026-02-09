@@ -1302,19 +1302,23 @@ function drawEntityFootprintGlow(e, ox, oy) {
   if (!e || e.hp <= 0) return;
 
   const size = entityFootprint(e);
-  if (size <= 1) return; // normal enemies → no glow
+  if (size <= 1) return;
 
   const half = Math.floor(size / 2);
   const left = e.x - half;
   const top  = e.y - half;
 
-  const pulse = 0.04 * Math.sin(performance.now() / 220);
-const base = (e.kind === "boss") ? 0.22 : 0.16;
-const alpha = base + pulse;
+  // animation pulse
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 220);
 
+  // stronger for bosses
+  const maxAlpha = (e.kind === "boss") ? 0.35 : 0.25;
+
+  // center of footprint in tile coords
+  const cx = e.x + 0.5;
+  const cy = e.y + 0.5;
 
   CTX.save();
-  CTX.fillStyle = `rgba(255,40,40,${alpha})`;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -1326,6 +1330,27 @@ const alpha = base + pulse;
       const px = ox + tx * TS;
       const py = oy + ty * TS;
 
+      // distance from this tile to footprint center
+      const dx = (tx + 0.5) - cx;
+      const dy = (ty + 0.5) - cy;
+      const d  = Math.sqrt(dx * dx + dy * dy);
+
+      // normalize distance (0 at center → 1 at edge)
+      const maxD = size * 0.75;
+      const t = clamp(1 - d / maxD, 0, 1);
+
+      const a = maxAlpha * t * (0.75 + pulse * 0.25);
+
+      // radial-ish gradient per tile
+      const g = CTX.createRadialGradient(
+        px + TS / 2, py + TS / 2, TS * 0.15,
+        px + TS / 2, py + TS / 2, TS * 0.7
+      );
+
+      g.addColorStop(0, `rgba(255,40,40,${a})`);
+      g.addColorStop(1, `rgba(255,40,40,0)`);
+
+      CTX.fillStyle = g;
       CTX.fillRect(px, py, TS, TS);
     }
   }
