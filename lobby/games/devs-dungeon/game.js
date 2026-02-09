@@ -1305,6 +1305,42 @@ function entityBlocksTile(e, tx, ty) {
   return tx >= left && tx <= right && ty >= top && ty <= bottom;
 }
 
+function drawEntityFootprintGlow(e, ox, oy) {
+  if (!e || e.hp <= 0) return;
+
+  const size = entityFootprint(e);
+  if (size <= 1) return; // normal enemies → no glow
+
+  const half = Math.floor(size / 2);
+  const left = e.x - half;
+  const top  = e.y - half;
+
+  const pulse = 0.04 * Math.sin(performance.now() / 220);
+const base = (e.kind === "boss") ? 0.22 : 0.16;
+const alpha = base + pulse;
+
+
+  CTX.save();
+  CTX.fillStyle = `rgba(255,40,40,${alpha})`;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const tx = left + x;
+      const ty = top + y;
+
+      if (!explored[ty]?.[tx]) continue;
+
+      const px = ox + tx * TS;
+      const py = oy + ty * TS;
+
+      CTX.fillRect(px, py, TS, TS);
+    }
+  }
+
+  CTX.restore();
+}
+
+
 function getBlockingEntityAt(x, y) {
   return entities.find(e => entityBlocksTile(e, x, y)) || null;
 }
@@ -2242,6 +2278,15 @@ if (UI.gas && UI.gas.style) {
         }
       }
     }
+
+    // --- Boss / Mini-boss footprint glow (drawn on floor) ---
+for (const e of entities) {
+  if (e.hp <= 0) continue;
+  if (e.kind !== "boss" && e.kind !== "miniboss") continue;
+
+  drawEntityFootprintGlow(e, ox, oy);
+}
+
 
     // Items
     for (const it of items) {
