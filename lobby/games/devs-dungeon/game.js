@@ -1362,6 +1362,23 @@ function drawEntityFootprintGlow(e, ox, oy) {
 function getBlockingEntityAt(x, y) {
   return entities.find(e => entityBlocksTile(e, x, y)) || null;
 }
+  function footprintFitsAt(cx, cy, size) {
+  const half = Math.floor(size / 2);
+  const left = cx - half, top = cy - half;
+  const right = left + size - 1, bottom = top + size - 1;
+
+  for (let y = top; y <= bottom; y++) {
+    for (let x = left; x <= right; x++) {
+      if (isWall(x, y)) return false;
+      if (map[y]?.[x] !== ".") return false;
+      if (getNPCAt(x, y) || getItemAt(x, y)) return false;
+
+      // ✅ NEW: footprint may not overlap the player
+      if (x === player.x && y === player.y) return false;
+    }
+  }
+  return true;
+}
 function footprintFitsAt(cx, cy, size) {
   const half = Math.floor(size / 2);
   const left = cx - half, top = cy - half;
