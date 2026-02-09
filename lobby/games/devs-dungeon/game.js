@@ -1358,7 +1358,6 @@ for (let i = 0; i < normalCount; i++) {
     animPhase,
   });
 }
-    }
 
     for (let i = 0; i < itemCount; i++) {
       const p = randomFloorTile();
