@@ -2313,7 +2313,24 @@ if (invOpen) {
 
   // Mobile menu actions (virtual keys)
   if (keys["save"]) { keys["save"] = false; saveGame(); }
-  if (keys["load"]) { keys["load"] = false; if (!loadGame()) log("No save found.", "#aaa"); }
+    if (keys["load"]) {
+    keys["load"] = false;
+
+    if (!loadGame()) {
+      log("No save found.", "#aaa");
+    } else {
+      // ✅ exit death state immediately after loading
+      gameOver = false;
+      win = false;
+      deathMenuShown = false;
+      mobileMenuOpen = false;
+      invOpen = false;
+      logOpen = false;
+      revealFog();
+      updateUI();
+    }
+  }
+
   if (keys["new"])  { keys["new"]  = false; newGame(); acted = true; }
    if (keys["arcade"]) {
   keys["arcade"] = false;
@@ -2689,7 +2706,55 @@ if (gameOver || win) {
   const w = Math.min(520, W - 40);
   const h = 170;
   const x = (W - w) / 2;
-  const y = (isMobile ? MOBILE_TOP_UI_H + 18 : 80);
+  // Game over / win overlay (mobile-friendly)
+if (gameOver || win) {
+  const w = Math.min(520, W - 40);
+  const h = 170;
+  const x = (W - w) / 2;
+
+  // Default position
+  let y = isMobile ? (MOBILE_TOP_UI_H + 18) : 80;
+
+  // ✅ On mobile: if the menu is open, keep the GAME OVER panel ABOVE it
+  if (isMobile && mobileMenuOpen) {
+    const menuW = 260;
+    const rowH = 40;
+    const menuOpts = 6; // SAVE, LOAD, NEW, LOG, INVENTORY, ARCADE (matches your opts array)
+    const menuH = 44 + menuOpts * rowH + 12;
+    const menuY = H - MOBILE_UI_H - menuH - 14;
+
+    // put overlay above menu with a gap
+    y = Math.min(y, menuY - h - 12);
+
+    // clamp so it never goes above the top UI
+    y = Math.max(MOBILE_TOP_UI_H + 10, y);
+  }
+
+  CTX.fillStyle = "rgba(0,0,0,0.72)";
+  CTX.fillRect(x, y, w, h);
+  CTX.strokeStyle = "rgba(0,255,120,0.25)";
+  CTX.strokeRect(x, y, w, h);
+
+  CTX.textAlign = "center";
+  CTX.textBaseline = "top";
+  CTX.fillStyle = "rgba(0,255,180,0.9)";
+  CTX.font = `bold 22px "Courier New", monospace`;
+  CTX.fillText(win ? "YOU WIN" : "GAME OVER", x + w/2, y + 16);
+
+  CTX.fillStyle = "rgba(200,200,200,0.85)";
+  CTX.font = `16px "Courier New", monospace`;
+  CTX.fillText("Tap MENU to load / restart / save / arcade", x + w/2, y + 60);
+
+  // force menu visible on mobile ONCE so player sees options immediately
+  if (isMobile && !deathMenuShown) {
+    mobileMenuOpen = true;
+    deathMenuShown = true;
+  }
+
+  CTX.textAlign = "left";
+  CTX.textBaseline = "top";
+}
+
 
   CTX.fillStyle = "rgba(0,0,0,0.72)";
   CTX.fillRect(x, y, w, h);
