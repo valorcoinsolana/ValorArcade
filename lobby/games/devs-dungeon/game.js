@@ -2712,48 +2712,39 @@ if (dt >= 0 && dt < atkMs) {
 if (!isMobile) drawDesktopHotbar();
 
     // Inventory overlay
-    if (invOpen) drawInventoryOverlay();
-    if (logOpen) drawLogOverlay();
+if (invOpen) drawInventoryOverlay();
+if (logOpen) drawLogOverlay();
 
-
-    // Game over / win overlay (draw BEHIND menu)
+// Game over / win overlay (draw BEHIND menu)
 if (gameOver || win) {
-  // force menu visible on mobile ONCE so player sees options immediately
   if (isMobile && !deathMenuShown) {
     mobileMenuOpen = true;
     deathMenuShown = true;
   }
 
   const topSafe = isMobile ? MOBILE_TOP_UI_H : 0;
-  const bottomSafe = isMobile ? MOBILE_UI_H : 0;
 
   const w = Math.min(520, W - 24);
   const x = (W - w) / 2;
-
-  // keep it in the safe world strip (above the bottom controls)
   const y = topSafe + 12;
   const h = 120;
 
-  // panel
   CTX.save();
   CTX.fillStyle = "rgba(0,0,0,0.75)";
   CTX.fillRect(x, y, w, h);
   CTX.strokeStyle = "rgba(0,255,120,0.25)";
   CTX.strokeRect(x, y, w, h);
 
-  // clip so text can NEVER spill outside
   CTX.beginPath();
   CTX.rect(x, y, w, h);
   CTX.clip();
 
-  // title
   CTX.textAlign = "center";
   CTX.textBaseline = "top";
   CTX.fillStyle = "rgba(0,255,180,0.92)";
   CTX.font = `bold 22px "Courier New", monospace`;
   CTX.fillText(win ? "YOU WIN" : "GAME OVER", x + w / 2, y + 12);
 
-  // wrapped hint
   CTX.fillStyle = "rgba(200,200,200,0.88)";
   CTX.font = `16px "Courier New", monospace`;
 
@@ -2769,14 +2760,15 @@ if (gameOver || win) {
   }
 
   CTX.restore();
-
-  // restore defaults
   CTX.textAlign = "left";
   CTX.textBaseline = "top";
 }
 
-// Mobile controls (dpad/hotbar/buttons/menu overlay) — draw AFTER the banner so menu is on top
+// Mobile controls LAST so the menu is on top
 if (isMobile) drawMobileControls();
+
+requestAnimationFrame(render);
+
 
 
 
