@@ -1996,7 +1996,17 @@ function npcTrade(n) {
 function npcBlessing(n) {
   const roll = Math.random();
 
-  if (roll < 0.4) {
+  // ✅ ALWAYS heal first
+  const healAmt = Math.max(4, (player.maxhp * 0.25) | 0);
+  const before = player.hp;
+  player.hp = Math.min(player.maxhp, player.hp + healAmt);
+
+  if (player.hp > before) {
+    log(`Ape Priest heals you for ${player.hp - before}.`, "#9f9");
+  }
+
+  // 🎲 Then apply a blessing
+  if (roll < 0.35) {
     player.atk += 1;
     log("You feel stronger. (+1 ATK)", "#9f9");
   } else if (roll < 0.7) {
@@ -2009,6 +2019,7 @@ function npcBlessing(n) {
 
   beep(880, 0.06, 0.12, "triangle");
 }
+
 
   function tryNudgeNPC(n) {
   if (!n) return false;
