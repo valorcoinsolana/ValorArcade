@@ -2766,39 +2766,6 @@ if (gameOver || win) {
 
 // Mobile controls LAST so the menu is on top
 if (isMobile) drawMobileControls();
-
-requestAnimationFrame(render);
-
-
-
-
-  CTX.fillStyle = "rgba(0,0,0,0.72)";
-  CTX.fillRect(x, y, w, h);
-  CTX.strokeStyle = "rgba(0,255,120,0.25)";
-  CTX.strokeRect(x, y, w, h);
-
-  CTX.textAlign = "center";
-  CTX.textBaseline = "top";
-  CTX.fillStyle = "rgba(0,255,180,0.9)";
-  CTX.font = `bold 22px "Courier New", monospace`;
-  CTX.fillText(win ? "YOU WIN" : "GAME OVER", x + w/2, y + 16);
-
-  CTX.fillStyle = "rgba(200,200,200,0.85)";
-  CTX.font = `16px "Courier New", monospace`;
-  CTX.fillText(isMobile ? "Tap MENU to load / restart / save / arcade" : "Press M (menu) or L (load)", x + w/2, y + 60);
-
-  // force menu visible on mobile ONCE so player sees options immediately
-if (isMobile && !deathMenuShown) {
-  mobileMenuOpen = true;
-  deathMenuShown = true;
-}
-
-
-  CTX.textAlign = "left";
-  CTX.textBaseline = "top";
-}
-
-
     requestAnimationFrame(render);
   }
 
