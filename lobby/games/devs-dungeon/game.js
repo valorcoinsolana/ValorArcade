@@ -1093,6 +1093,32 @@ function bossForFloor(floor) {
   return weighted[(Math.random() * weighted.length) | 0];
 }
 
+  function pickItemTypeByFloor(floor) {
+  // Base weights (1 = normal chance)
+  const weights = {
+    heal: 1.0,
+    gas:  1.0,
+    xp:   1.0,
+    atk:  0.7,
+    def:  0.7
+  };
+
+  // Boost gas early, taper off
+  if (floor <= 6)  weights.gas = 3.2;
+  else if (floor <= 12) weights.gas = 2.0;
+  else if (floor <= 20) weights.gas = 1.4;
+
+  // Build weighted pool
+  const pool = [];
+  for (const it of ITEM_TYPES) {
+    const w = weights[it.kind] ?? 1.0;
+    const copies = Math.max(1, Math.round(w * 10)); // granularity
+    for (let i = 0; i < copies; i++) pool.push(it);
+  }
+
+  return pool[(Math.random() * pool.length) | 0];
+}
+
 
 
   const ITEM_TYPES = [
@@ -1362,7 +1388,7 @@ for (let i = 0; i < normalCount; i++) {
     for (let i = 0; i < itemCount; i++) {
       const p = randomFloorTile();
       if (!p) break;
-      const t = ITEM_TYPES[rand(0, ITEM_TYPES.length - 1)];
+      const t = pickItemTypeByFloor(gameLevel);
       const animPhase = (p.x * 5 + p.y * 11 + i * 2) | 0;
       items.push({ ...p, ...t, animPhase });
     }
