@@ -957,16 +957,15 @@ if (player.hotbar && Array.isArray(player.hotbar)) {
     player = {
       x: 0, y: 0,
       facing: "down",     // "up" | "down" | "left" | "right"
-step: 0,            // 0 or 1 (which walk frame)
-stepAt: 0,          // timestamp of last step toggle
+      step: 0,            // 0 or 1 (which walk frame)
+      stepAt: 0,          // timestamp of last step toggle
       attackAt: 0,        // timestamp of last attack
-attackDir: "down",  // direction of last attack
-
-
+      attackDir: "down",  // direction of last attack
       hp: cl.start.hp, maxhp: cl.start.maxhp,
       atk: cl.start.atk, def: cl.start.def,
       vision: cl.start.vision + (idx === 0 ? 1 : 0),
       lvl: 1, xp: 0, xpNext: 50,
+      levelUpAt: 0,
       gas: 50,
       rep: 0,
       className: cl.name,
@@ -1450,6 +1449,7 @@ for (let i = 0; i < normalCount; i++) {
     while (player.xp >= player.xpNext) {
       player.xp -= player.xpNext;
       player.lvl++;
+      player.levelUpAt = performance.now();
       player.xpNext = (player.xpNext * 1.25) | 0;
       player.maxhp += rand(3, 6);
       player.hp = player.maxhp;
@@ -2303,6 +2303,36 @@ if (UI.gas && UI.gas.style) {
   } else {
     drawText(px + 4, py + 2, "@", "#0f8");
   }
+  // --- Level-up glow (yellow burst) ---
+const LU_MS = 420;
+const dtLU = nowMs - (player.levelUpAt || 0);
+
+if (dtLU >= 0 && dtLU < LU_MS) {
+  const t = dtLU / LU_MS;           // 0 → 1
+  const ease = 1 - Math.pow(1 - t, 2);
+
+  const cx = px + TS / 2;
+  const cy = py + TS / 2;
+
+  CTX.save();
+
+  // Outer ring
+  CTX.globalAlpha = 0.55 * (1 - t);
+  CTX.strokeStyle = "rgba(255, 230, 90, 1)";
+  CTX.lineWidth = 3;
+  CTX.beginPath();
+  CTX.arc(cx, cy, TS * (0.6 + ease * 1.2), 0, Math.PI * 2);
+  CTX.stroke();
+
+  // Inner glow
+  CTX.globalAlpha = 0.35 * (1 - t);
+  CTX.fillStyle = "rgba(255, 255, 140, 1)";
+  CTX.beginPath();
+  CTX.arc(cx, cy, TS * (0.35 + ease * 0.8), 0, Math.PI * 2);
+  CTX.fill();
+
+  CTX.restore();
+}
   // --- Player HP bar ABOVE the sprite ---
 {
   const w = TS - 4;
