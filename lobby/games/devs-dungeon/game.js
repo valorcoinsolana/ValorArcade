@@ -49,9 +49,7 @@ const SPRITE_SRC = 32; // source pixel size of artwork (was 16)
   let entities = [];
   let items = [];
   let npcs = [];
-  // ======================
-// Floating combat text
-// ======================
+  let npcSpeech = []; 
 let floatTexts = []; // { x,y, text, color, start, dur, rise, jitter }
 
 function spawnFloatText(tx, ty, text, color = "#f66") {
@@ -66,6 +64,17 @@ function spawnFloatText(tx, ty, text, color = "#f66") {
     jitter: (Math.random() * 0.25) - 0.125 // small horizontal variation (tiles)
   });
 }
+  function speakNPC(npc, text, duration = 3000, cps = 32) {
+  npcSpeech.push({
+    npcRef: npc,
+    text: String(text),
+    start: performance.now(),
+    duration,
+    cps
+  });
+}
+
+
 
 function drawFloatTexts(nowMs, ox, oy) {
   if (!floatTexts.length) return;
@@ -2036,7 +2045,14 @@ function useInventoryItem(index) {
     if (!best) { log("No NPC nearby.", "#aaa"); return; }
     const n = best.n;
     const line = n.lines[rand(0, n.lines.length - 1)];
-    log(`${n.name}: "${line}"`, n.color);
+log(`${n.name}: "${line}"`, n.color);
+
+// ✅ bubble shows the spoken line (typed)
+speakNPC(n, line, 3000, 34);
+
+// ✅ optional extra little quip (comment out if you want only the line)
+// speakNPC(n, pickQuip(n, "talk"), 3000, 34);
+
     player.rep += rand(-1, 2);
     if (Math.random() < 0.25) player.gas += rand(1, 8);
     beep(520, 0.04, 0.10, "triangle");
@@ -2076,6 +2092,8 @@ function useInventoryItem(index) {
         revealFog();     // refresh local visibility edges (optional but feels instant)
 updateUI();      // harmless; keeps UI synced
         log("Meme Lord leaks the stair coords 👀", "#9ff");
+        const ml = npcs.find(x => x.role === "lore") || null;
+if (ml) speakNPC(ml, pickQuip(ml, "revealStairs"), 3000, 34);
         return;
       }
     }
@@ -2108,9 +2126,11 @@ function revealRandomMapHint() {
 function npcTrade(n) {
   const cost = 25 + gameLevel * 3;
   if (player.gas < cost) {
-    log("Not enough gas to trade.", "#f96");
-    return;
-  }
+  log("Not enough gas to trade.", "#f96");
+  speakNPC(n, pickQuip(n, "broke"), 3000, 34);
+  return;
+}
+
 
   player.gas -= cost;
 
@@ -2123,6 +2143,8 @@ function npcTrade(n) {
   });
 
   log(`Trade complete. ${t.name} dropped.`, "#0ff");
+  speakNPC(n, `${pickQuip(n, "traded")} (${t.name})`, 3000, 34);
+
 }
 function npcBlessing(n) {
   const roll = Math.random();
@@ -2134,18 +2156,24 @@ function npcBlessing(n) {
   const healed = player.hp - before;
   if (healed > 0) spawnFloatText(player.x, player.y, `+${healed}`, "#6f6");
   log(`Ape Priest heals you (+${healed} HP).`, "#9f9");
+  speakNPC(n, pickQuip(n, "blessedHeal"), 3000, 34);
+
 
   // ✅ plus the old random buff
   if (roll < 0.4) {
-    player.atk += 1;
-    log("You feel stronger. (+3 ATK)", "#9f9");
-  } else if (roll < 0.7) {
-    player.def += 1;
-    log("Your resolve hardens. (+3 DEF)", "#9f9");
-  } else {
-    player.vision += 1;
-    log("Your sight expands. (+3 VISION)", "#9f9");
-  }
+  player.atk += 1;
+  log("You feel stronger. (+3 ATK)", "#9f9");
+  speakNPC(n, pickQuip(n, "blessedAtk"), 3000, 34);
+} else if (roll < 0.7) {
+  player.def += 1;
+  log("Your resolve hardens. (+3 DEF)", "#9f9");
+  speakNPC(n, pickQuip(n, "blessedDef"), 3000, 34);
+} else {
+  player.vision += 1;
+  log("Your sight expands. (+3 VISION)", "#9f9");
+  speakNPC(n, pickQuip(n, "blessedVis"), 3000, 34);
+}
+
 
   beep(880, 0.06, 0.12, "triangle");
 }
@@ -2576,6 +2604,190 @@ if (UI.gas && UI.gas.style) {
   if (line) lines.push(line);
   return lines;
 }
+  // ======================
+// NPC Speech Bubbles (rounded + pointer + typing)
+// ======================
+const SPEECH_CFG = {
+  durMs: 3000,
+  typeCps: 32,          // characters per second typing speed
+  padX: 10,
+  padY: 7,
+  maxWpx: 260,          // bubble max width in pixels
+  minWpx: 80,
+  lineHpx: 16,
+  yOffsetTiles: 0.65,   // how far above head (in tiles)
+  pointerH: 10,
+  radius: 10
+};
+
+// role/context-specific quips
+const NPC_QUIPS = {
+  lore: {
+    talk: [
+      "GM. I know things I shouldn't.",
+      "The chain whispers… listen.",
+      "Alpha leaks are my cardio."
+    ],
+    revealStairs: [
+      "Fine. Stairs are *that* way. Don't tell anyone.",
+      "Coords leaked. You're welcome.",
+      "I shouldn't… but I did."
+    ]
+  },
+  trader: {
+    talk: [
+      "I can trade… for a fee.",
+      "Gas up. Deals down.",
+      "No refunds. Immutable vibes."
+    ],
+    traded: [
+      "Pleasure doing business.",
+      "Enjoy the item. It's probably not cursed.",
+      "Trade executed. Slippage tolerated."
+    ],
+    broke: [
+      "Come back with more gas.",
+      "Insufficient gas. NGMI.",
+      "You’re one fee short."
+    ]
+  },
+  buffer: {
+    talk: [
+      "Blessings are real. So are gas fees.",
+      "Step forward, degen.",
+      "I sense low liquidity in your aura."
+    ],
+    blessedHeal: [
+      "Be healed. And don’t ape irresponsibly.",
+      "Health restored. Brain not included.",
+      "Your HP pumps. Your judgement… TBD."
+    ],
+    blessedAtk: [
+      "Strength granted. Use it wisely (you won’t).",
+      "ATK up. Rugpulls beware.",
+      "Go forth and bonk."
+    ],
+    blessedDef: [
+      "Your resolve hardens. So does the floor.",
+      "DEF up. Paper hands down.",
+      "Armor blessed. Ego unchanged."
+    ],
+    blessedVis: [
+      "Your sight expands. Your fear too.",
+      "Vision granted. Secrets ahead.",
+      "You can see more. Congrats?"
+    ]
+  },
+  generic: {
+    talk: [
+      "…",
+      "GM.",
+      "WAGMI?"
+    ]
+  }
+};
+
+function pickQuip(npc, bucket) {
+  const role = npc?.role || "generic";
+  const src = (NPC_QUIPS[role] && NPC_QUIPS[role][bucket]) || NPC_QUIPS.generic.talk;
+  return src[(Math.random() * src.length) | 0];
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.max(2, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawNpcSpeechBubbles(nowMs, ox, oy, topSafe, bottomSafe) {
+  if (!npcSpeech.length) return;
+
+  // drop expired
+  npcSpeech = npcSpeech.filter(s => (nowMs - s.start) < (s.duration || SPEECH_CFG.durMs));
+
+  CTX.save();
+  CTX.textAlign = "left";
+  CTX.textBaseline = "top";
+  CTX.font = `bold ${Math.max(12, (TS * 0.46) | 0)}px "Courier New", monospace`;
+
+  const worldTop = topSafe || 0;
+  const worldBottom = H - (bottomSafe || 0);
+
+  for (const s of npcSpeech) {
+    const n = s.npcRef;
+    if (!n) continue;
+    if (!explored[n.y]?.[n.x]) continue;
+    if (!isVisible(n.x, n.y)) continue;
+
+    const full = String(s.text || "");
+    const dt = Math.max(0, nowMs - s.start);
+
+    // typing animation
+    const cps = s.cps || SPEECH_CFG.typeCps;
+    const shownChars = Math.min(full.length, Math.floor((dt / 1000) * cps));
+    const shown = full.slice(0, shownChars);
+
+    // bubble anchor (above NPC head)
+    const ax = ox + (n.x + 0.5) * TS;
+    const ay = oy + (n.y - SPEECH_CFG.yOffsetTiles) * TS;
+
+    const maxW = Math.max(SPEECH_CFG.minWpx, Math.min(SPEECH_CFG.maxWpx, (TS * 9) | 0));
+    const lines = wrapTextLines(CTX, shown, maxW - SPEECH_CFG.padX * 2);
+
+    // measure width by longest line
+    let textW = 0;
+    for (const L of lines) textW = Math.max(textW, CTX.measureText(L).width);
+    const w = Math.min(maxW, Math.max(SPEECH_CFG.minWpx, Math.ceil(textW + SPEECH_CFG.padX * 2)));
+    const h = Math.max(28, lines.length * SPEECH_CFG.lineHpx + SPEECH_CFG.padY * 2);
+
+    // place centered, clamp to world bounds
+    let x = (ax - w / 2) | 0;
+    let y = (ay - h - SPEECH_CFG.pointerH) | 0;
+
+    x = clamp(x, 8, W - w - 8);
+    y = clamp(y, worldTop + 6, worldBottom - h - SPEECH_CFG.pointerH - 6);
+
+    // bubble body
+    CTX.save();
+    CTX.globalAlpha = 0.92;
+    CTX.fillStyle = "rgba(0,0,0,0.78)";
+    CTX.strokeStyle = "rgba(0,255,180,0.22)";
+    CTX.lineWidth = 2;
+
+    roundRect(CTX, x, y, w, h, SPEECH_CFG.radius);
+    CTX.fill();
+    CTX.stroke();
+
+    // pointer triangle to NPC
+    const px = clamp(ax, x + 14, x + w - 14);
+    const py = y + h;
+    CTX.beginPath();
+    CTX.moveTo(px - 10, py);
+    CTX.lineTo(px + 10, py);
+    CTX.lineTo(px, py + SPEECH_CFG.pointerH);
+    CTX.closePath();
+    CTX.fill();
+    CTX.stroke();
+
+    // text
+    CTX.fillStyle = "rgba(220,255,240,0.95)";
+    let ty = y + SPEECH_CFG.padY;
+    const tx = x + SPEECH_CFG.padX;
+    for (const L of lines) {
+      CTX.fillText(L, tx, ty);
+      ty += SPEECH_CFG.lineHpx;
+    }
+
+    CTX.restore();
+  }
+
+  CTX.restore();
+}
 
   function render() {
     const nowMs = performance.now();
@@ -2682,6 +2894,8 @@ for (const e of entities) {
         drawText(px + 4, py + 2, n.ch, n.color);
       }
     }
+    drawNpcSpeechBubbles(nowMs, ox, oy, MOBILE_TOP_UI_H, MOBILE_UI_H);
+
 
     // Enemies
     for (const e of entities) {
