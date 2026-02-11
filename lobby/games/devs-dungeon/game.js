@@ -1567,7 +1567,13 @@ function footprintFitsAtEntity(cx, cy, size, self) {
   }
 
   function spawnContent() {
-    const enemyCount = clamp(6 + gameLevel * 2, 8, 40);
+    // ✅ Reduced enemy spawn ramp (piecewise pacing)
+let enemyCount = 0;
+if (gameLevel <= 10) enemyCount = 6 + Math.floor(gameLevel * 0.6);       // 6 → 12
+else if (gameLevel <= 30) enemyCount = 12 + Math.floor((gameLevel-10)*0.45); // 12 → 21
+else enemyCount = 21 + Math.floor((gameLevel-30)*0.25);                 // 21 → ~26
+enemyCount = clamp(enemyCount, 6, 28);
+
     const itemCount  = clamp(3 + (gameLevel / 4 | 0), 2, 10);
     const npcCount   = clamp((gameLevel % 3 === 0) ? 1 : 0, 0, 2);
       
